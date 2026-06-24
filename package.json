@@ -1,5 +1,5 @@
 {
-  "name": "flow-agent",
+  "name": "wright",
   "version": "1.0.0",
   "scripts": {
     "dev:cli": "bun run --watch packages/cli/src/index.tsx"

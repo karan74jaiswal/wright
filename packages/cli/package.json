@@ -1,5 +1,5 @@
 {
-  "name": "@flow/cli",
+  "name": "@wright/cli",
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
