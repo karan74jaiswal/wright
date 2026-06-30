@@ -84,7 +84,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
           })
         : textAreaRef.current.insertText(`${cmd.value} `);
     },
-    [renderer],
+    [renderer, toast, dialog],
   );
 
   const handleCommandExecute = useCallback(
