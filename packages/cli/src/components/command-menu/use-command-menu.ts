@@ -1,8 +1,9 @@
 import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
-import { useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import { getFilteredCommands } from "./filter-command";
 import type { Command } from "./types";
 import { useKeyboard, useRenderer } from "@opentui/react";
+import { useKeyboardLayer } from "../../providers/keyboard";
 
 export interface UseCommandMenuReturn {
   showCommandMenu: boolean;
@@ -21,13 +22,15 @@ export function useCommandMenu(): UseCommandMenuReturn {
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [showCommandMenu, setShowCommandMenu] = useState<boolean>(false);
   const scrollRef = useRef<ScrollBoxRenderable>(null);
+  const { push, pop, isTopLayer } = useKeyboardLayer();
 
   const commandQuery =
     showCommandMenu && textValue.startsWith("/") ? textValue.slice(1) : "";
 
-  // useEffect(() => {
-  //   renderer.console.show();
-  // }, []);
+  const close = useCallback(() => {
+    setShowCommandMenu(false);
+    pop("command");
+  }, [pop]);
 
   const filteredCommands = useMemo(
     () => getFilteredCommands(commandQuery),
@@ -44,14 +47,16 @@ export function useCommandMenu(): UseCommandMenuReturn {
 
     if (prefix !== null && !prefix.includes(" ")) {
       setShowCommandMenu(true);
-    } else {
-      setShowCommandMenu(false);
-    }
+      push("command", () => {
+        close();
+        return true;
+      });
+    } else close();
   };
 
   const resolveCommand = function (index: number): Command | undefined {
     const cmd = filteredCommands[index];
-    if (cmd) setShowCommandMenu(false);
+    if (cmd) close();
     return cmd;
     // cmd?.action && cmd?.action({ exit: () => {} });
   };
@@ -62,10 +67,10 @@ export function useCommandMenu(): UseCommandMenuReturn {
       // renderer.console.activate();
       renderer.console.toggle();
     }
-    if (!showCommandMenu) return;
+    if (!showCommandMenu || !isTopLayer("command")) return;
     // e.preventDefault();
 
-    if (e.name === "escape") setShowCommandMenu(false);
+    if (e.name === "escape") close();
 
     if (e.name === "down") {
       // console.log("down pressed");
