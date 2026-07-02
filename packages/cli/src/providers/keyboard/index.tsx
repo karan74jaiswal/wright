@@ -60,7 +60,7 @@ const KeyBoardProvider = function ({
   );
 
   useKeyboard((key: KeyEvent) => {
-    console.log(stack);
+    // console.log(stack);
     if (key.name === "t" && key.ctrl) {
       //  console.log(e);
       // renderer.console.activate();
