@@ -60,6 +60,13 @@ const KeyBoardProvider = function ({
   );
 
   useKeyboard((key: KeyEvent) => {
+    console.log(stack);
+    if (key.name === "t" && key.ctrl) {
+      //  console.log(e);
+      // renderer.console.activate();
+      renderer.console.toggle();
+      // console.log(stack);
+    }
     if (key.ctrl && key.name === "c") {
       const currentStack = stackRef.current;
       for (let i = currentStack.length - 1; i >= 0; i--) {

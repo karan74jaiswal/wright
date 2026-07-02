@@ -59,6 +59,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
 
   const handleTextAreaContentChange = useCallback(() => {
     if (!textAreaRef.current) return;
+
     handleContentChange(textAreaRef.current.plainText);
   }, []);
 
@@ -89,10 +90,11 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
 
   const handleCommandExecute = useCallback(
     (index: number) => {
+      if (disabled) return;
       const command = resolveCommand(index);
       handleCommand(command);
     },
-    [resolveCommand, handleCommand],
+    [resolveCommand, handleCommand, disabled],
   );
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
               />
             </box>
           )}
+
           <textarea
             focused={!disabled && (isTopLayer("base") || isTopLayer("command"))}
             ref={textAreaRef}

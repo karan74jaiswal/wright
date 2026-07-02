@@ -6,12 +6,14 @@
       "name": "flow-agent",
     },
     "packages/cli": {
-      "name": "@flow/cli",
+      "name": "@wright/cli",
       "dependencies": {
         "@opentui/core": "^0.4.1",
         "@opentui/react": "^0.4.1",
         "@types/react": "^19.2.17",
+        "opentui-spinner": "^0.0.7",
         "react": "^19.2.7",
+        "react-router": "^8.1.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
@@ -22,8 +24,6 @@
     },
   },
   "packages": {
-    "@flow/cli": ["@flow/cli@workspace:packages/cli"],
-
     "@opentui/core": ["@opentui/core@0.4.1", "", { "dependencies": { "bun-ffi-structs": "0.2.3", "diff": "9.0.0", "marked": "17.0.1", "string-width": "7.2.0", "strip-ansi": "7.1.2" }, "optionalDependencies": { "@opentui/core-darwin-arm64": "0.4.1", "@opentui/core-darwin-x64": "0.4.1", "@opentui/core-linux-arm64": "0.4.1", "@opentui/core-linux-arm64-musl": "0.4.1", "@opentui/core-linux-x64": "0.4.1", "@opentui/core-linux-x64-musl": "0.4.1", "@opentui/core-win32-arm64": "0.4.1", "@opentui/core-win32-x64": "0.4.1" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-ejlunoFCGLcghYGdfamI/DlWHsgCTLbuoL2JeOmFuLsN+DM5phje3CQbGR4tpl24cadCgHJQFomjoQ9Htvin+Q=="],
 
     "@opentui/core-darwin-arm64": ["@opentui/core-darwin-arm64@0.4.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-ocs73hj9n0zLArOTpUWIXCWU6ERThG+3wQzO78EvfaR4hb5FRrDHGKWTzXpr6ukSKsUtKdztK5XYTPsJ5e3vww=="],
@@ -50,11 +50,17 @@
 
     "@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
 
+    "@wright/cli": ["@wright/cli@workspace:packages/cli"],
+
     "ansi-regex": ["ansi-regex@6.2.2", "", {}, "sha512-Bq3SmSpyFHaWjPk8If9yc6svM8c56dB5BAtW4Qbw5jHTwwXXcTLoRMkpDJp6VL0XzlWaCHTXrkFURMYmD0sLqg=="],
 
     "bun-ffi-structs": ["bun-ffi-structs@0.2.3", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-pgJiXP+hEgFo9qG51J6ItfY4ocs3vniwNzJ9WhoakB3QB2GdzQxX2EXssentPYlB2hOfJrTjO6iIQkWYzUodpg=="],
 
     "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+
+    "cli-spinners": ["cli-spinners@3.4.0", "", {}, "sha512-bXfOC4QcT1tKXGorxL3wbJm6XJPDqEnij2gQ2m7ESQuE+/z9YFIWnl/5RpTiKWbMq3EVKR4fRLJGn6DVfu0mpw=="],
+
+    "cookie-es": ["cookie-es@3.1.1", "", {}, "sha512-UaXxwISYJPTr9hwQxMFYZ7kNhSXboMXP+Z3TRX6f1/NyaGPfuNUZOWP1pUEb75B2HjfklIYLVRfWiFZJyC6Npg=="],
 
     "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
 
@@ -66,11 +72,15 @@
 
     "marked": ["marked@17.0.1", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-boeBdiS0ghpWcSwoNm/jJBwdpFaMnZWRzjA6SkUMYb40SVaN1x7mmfGKp0jvexGcx+7y2La5zRZsYFZI6Qpypg=="],
 
+    "opentui-spinner": ["opentui-spinner@0.0.7", "", { "dependencies": { "cli-spinners": "^3.3.0" }, "peerDependencies": { "@opentui/core": "^0.3.4", "@opentui/react": "^0.3.4", "@opentui/solid": "^0.3.4", "typescript": "^5" }, "optionalPeers": ["@opentui/react", "@opentui/solid"] }, "sha512-nPzwAvJG+y9rVEwwHLHqbsMzLnIk2zw+F9LqwA7aYJvpM5gsrKC2rrGi36A+tZpA+1RnWxXeWEgVZMchnaH18Q=="],
+
     "react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
 
     "react-devtools-core": ["react-devtools-core@7.0.1", "", { "dependencies": { "shell-quote": "^1.6.1", "ws": "^7" } }, "sha512-C3yNvRHaizlpiASzy7b9vbnBGLrhvdhl1CbdU6EnZgxPNbai60szdLtl+VL76UNOt5bOoVTOz5rNWZxgGt+Gsw=="],
 
     "react-reconciler": ["react-reconciler@0.33.0", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.0" } }, "sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA=="],
+
+    "react-router": ["react-router@8.1.0", "", { "dependencies": { "cookie-es": "^3.1.1" }, "peerDependencies": { "react": ">=19.2.7", "react-dom": ">=19.2.7" }, "optionalPeers": ["react-dom"] }, "sha512-Mdfi61uObuvWNN9OhChOC0HV6YWOIfKRzEWOvCHRSuQg8IM+Nv10edaM/2HE8ZixBpUTdQbruyWqC3sDkkh9vw=="],
 
     "scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
 
