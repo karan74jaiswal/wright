@@ -16,7 +16,6 @@ export interface UseCommandMenuReturn {
 }
 
 export function useCommandMenu(): UseCommandMenuReturn {
-  const renderer = useRenderer();
   // 1. Initial values declaration
   const [textValue, setTextvalue] = useState<string>("");
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -62,11 +61,6 @@ export function useCommandMenu(): UseCommandMenuReturn {
   };
   // console.log(selectedIndex);
   useKeyboard((e: KeyEvent) => {
-    if (e.name === "t" && e.ctrl) {
-      //  console.log(e);
-      // renderer.console.activate();
-      renderer.console.toggle();
-    }
     if (!showCommandMenu || !isTopLayer("command")) return;
     // e.preventDefault();
 

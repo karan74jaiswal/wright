@@ -48,9 +48,7 @@ export function useDialogSearchList<T>({
   }, []);
 
   useKeyboard((key: KeyEvent) => {
-    // Commented out bcz already did this in provider.
-    // If it goes wrong then uncomment it.
-    // if ( !isTopLayer("dialog")) return;
+    if (!isTopLayer("dialog")) return;
     if (key.name === "enter" || key.name === "return") {
       const item = filtered[selectedIndex];
       if (item) onSelect(item);
