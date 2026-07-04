@@ -1,13 +1,10 @@
-import { InputBar } from "../components/input-bar";
 import { useLocation, useNavigate } from "react-router";
-import { useCallback, useEffect, useState } from "react";
-import { useTheme } from "../providers/theme";
+import { useEffect } from "react";
 
 import { ErrorMsg, BotMsg, UserMsg } from "../components/messages";
 import SessionShell from "../components/session-shell";
 
 const NewSession = () => {
-  const { colors } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as { message?: string } | null;

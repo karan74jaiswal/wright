@@ -1,20 +1,7 @@
-import {
-  type RefObject,
-  useCallback,
-  useRef,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
+import { type ReactNode } from "react";
 
-import {
-  TextAttributes,
-  type ScrollBoxRenderable,
-  type InputRenderable,
-} from "@opentui/core";
+import { TextAttributes } from "@opentui/core";
 
-import { useKeyboard } from "@opentui/react";
-import { useKeyboardLayer } from "../../providers/keyboard";
 import type { JSX } from "@opentui/react/jsx-runtime";
 import { useDialogSearchList } from "./use-dialog-search-list";
 import { useTheme } from "../../providers/theme";
@@ -83,7 +70,7 @@ export default function DialogSearchList<T>({
                 backgroundColor={isSelected ? colors.selection : undefined}
                 onMouseMove={() => {
                   setSelectedIndex(index);
-                  onHighlight && onHighlight(item);
+                  if (onHighlight) onHighlight(item);
                 }}
                 onMouseDown={() => onSelect(item)}
               >

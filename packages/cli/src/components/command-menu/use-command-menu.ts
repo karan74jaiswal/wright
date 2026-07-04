@@ -2,7 +2,7 @@ import type { KeyEvent, ScrollBoxRenderable } from "@opentui/core";
 import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import { getFilteredCommands } from "./filter-command";
 import type { Command } from "./types";
-import { useKeyboard, useRenderer } from "@opentui/react";
+import { useKeyboard } from "@opentui/react";
 import { useKeyboardLayer } from "../../providers/keyboard";
 
 export interface UseCommandMenuReturn {
@@ -40,7 +40,7 @@ export function useCommandMenu(): UseCommandMenuReturn {
     setTextvalue(text);
     setSelectedIndex(0);
 
-    scrollRef.current && scrollRef.current.scrollTo(0);
+    if (scrollRef.current) scrollRef.current.scrollTo(0);
 
     const prefix = text.startsWith("/") ? text.slice(1) : null;
 
@@ -86,8 +86,7 @@ export function useCommandMenu(): UseCommandMenuReturn {
     if (e.name === "up") {
       setSelectedIndex((i) => {
         const newIndex = Math.max(0, i - 1);
-        scrollRef.current &&
-          newIndex < scrollRef.current.scrollTop &&
+        if (scrollRef.current && newIndex < scrollRef.current.scrollTop)
           scrollRef.current.scrollTo(newIndex);
 
         return newIndex;

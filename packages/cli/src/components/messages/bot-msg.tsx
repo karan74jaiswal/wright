@@ -1,4 +1,3 @@
-import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../../providers/theme";
 
 export interface BotMsgProps {

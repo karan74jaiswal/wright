@@ -3,7 +3,6 @@ import { type PropsWithChildren } from "react";
 import { InputBar } from "./input-bar";
 import { TextAttributes } from "@opentui/core";
 
-import { useTheme } from "../providers/theme";
 import Spinner from "./spinner";
 
 export interface SessionShellProps extends PropsWithChildren {
@@ -18,7 +17,6 @@ const SessionShell = ({
   inputDisabled = false,
   loading = false,
 }: SessionShellProps) => {
-  const { colors } = useTheme();
   return (
     <box
       flexDirection="column"

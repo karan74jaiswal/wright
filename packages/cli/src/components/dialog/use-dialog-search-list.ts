@@ -3,7 +3,7 @@ import {
   type KeyEvent,
   type ScrollBoxRenderable,
 } from "@opentui/core";
-import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import { useKeyboard } from "@opentui/react";
 import { useKeyboardLayer } from "../../providers/keyboard";
 
@@ -34,7 +34,7 @@ export function useDialogSearchList<T>({
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const inputRef = useRef<InputRenderable>(null);
   const scrollRef = useRef<ScrollBoxRenderable>(null);
-  const { push, pop, isTopLayer } = useKeyboardLayer();
+  const { isTopLayer } = useKeyboardLayer();
 
   const filtered = searchValue
     ? items.filter((item) => filterFn(item, searchValue))
@@ -44,7 +44,7 @@ export function useDialogSearchList<T>({
     const text = inputRef.current?.value ?? "";
     setSearchvalue(text);
     setSelectedIndex(0);
-    scrollRef.current && scrollRef.current.scrollTo(0);
+    if (scrollRef.current) scrollRef.current.scrollTo(0);
   }, []);
 
   useKeyboard((key: KeyEvent) => {
@@ -68,18 +68,17 @@ export function useDialogSearchList<T>({
             newIndex - scrollRef.current.viewport.height + 1,
           );
       }
-      filtered[newIndex] && onHighlight?.(filtered[newIndex]);
+      if (filtered[newIndex]) onHighlight?.(filtered[newIndex]);
     }
 
     if (key.name === "up") {
       const newIndex = Math.max(0, selectedIndex - 1);
       setSelectedIndex(newIndex);
 
-      scrollRef.current &&
-        newIndex < scrollRef.current.scrollTop &&
+      if (scrollRef.current && newIndex < scrollRef.current.scrollTop)
         scrollRef.current.scrollTo(newIndex);
       const item = filtered[newIndex];
-      item && onHighlight && onHighlight(item);
+      if (item && onHighlight) onHighlight(item);
     }
   });
   return {

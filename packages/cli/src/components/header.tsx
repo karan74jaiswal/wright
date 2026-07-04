@@ -1,4 +1,3 @@
-import { TextAttributes, type ASCIIFontName } from "@opentui/core";
 import type { JSX } from "@opentui/react/jsx-runtime";
 
 export default function Header(): JSX.Element {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect } from "react";
 
 import { useDialog } from "../providers/dialog";
 
@@ -9,8 +9,8 @@ import { getThemeList, type Theme } from "../theme";
 
 const availableThemes = getThemeList();
 export default function ThemeDialog() {
-  const { colors, setTheme, currentTheme } = useTheme();
-  const { open, close } = useDialog();
+  const { setTheme, currentTheme } = useTheme();
+  const { close } = useDialog();
   const originalThemeRef = useRef<Theme>(currentTheme);
   const confirmedRef = useRef(false);
 

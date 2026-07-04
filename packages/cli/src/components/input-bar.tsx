@@ -61,7 +61,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
     if (!textAreaRef.current) return;
 
     handleContentChange(textAreaRef.current.plainText);
-  }, []);
+  }, [handleContentChange]);
 
   const handleSubmit = useCallback(() => {
     if (disabled || !textAreaRef.current) return;
@@ -77,13 +77,15 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
       if (!textAreaRef.current || !cmd) return;
       textAreaRef.current.setText("");
 
-      cmd.action
-        ? cmd.action({
-            exit: () => renderer.destroy(),
-            toast,
-            dialog,
-          })
-        : textAreaRef.current.insertText(`${cmd.value} `);
+      if (cmd.action)
+        cmd.action({
+          exit: () => renderer.destroy(),
+          toast,
+          dialog,
+        });
+      else {
+        textAreaRef.current.insertText(`${cmd.value} `);
+      }
     },
     [renderer, toast, dialog],
   );

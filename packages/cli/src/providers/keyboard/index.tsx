@@ -6,7 +6,6 @@ import {
   useContext,
   type PropsWithChildren,
   type ReactNode,
-  type RefObject,
 } from "react";
 import { useKeyboard, useRenderer } from "@opentui/react";
 import type { Responder } from "./types";
@@ -19,13 +18,11 @@ export interface KeyboardLayerContextValue {
   setResponder: (id: string, responder: Responder | null) => void;
 }
 const KeyboardContext = createContext<KeyboardLayerContextValue | null>(null);
-interface KeyBoardProviderProps extends PropsWithChildren {}
 
-const KeyBoardProvider = function ({
-  children,
-}: KeyBoardProviderProps): ReactNode {
+const KeyBoardProvider = function ({ children }: PropsWithChildren): ReactNode {
   const [stack, setStack] = useState<string[]>(["base"]);
   const stackRef = useRef(stack);
+  // eslint-disable-next-line react-hooks/refs
   stackRef.current = stack;
 
   const responders = useRef<Map<string, Responder>>(new Map());

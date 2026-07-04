@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import Header from "../components/header";
 import { InputBar } from "../components/input-bar";
 import { useTheme } from "../providers/theme";
