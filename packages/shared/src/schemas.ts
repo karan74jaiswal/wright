@@ -7,7 +7,7 @@ export const toolCallArgsSchema = z.record(z.string(), z.json());
 export const messagePartSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("reasoning"),
-    text: z.string,
+    text: z.string(),
   }),
   z.object({
     type: z.literal("tool-call"),
@@ -18,7 +18,7 @@ export const messagePartSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("text"),
-    text: z.string,
+    text: z.string(),
   }),
 ]);
 
