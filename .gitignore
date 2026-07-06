@@ -33,6 +33,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Finder (MacOS) folder config
 .DS_Store
 
+# Prisma
+/generated/prisma
+
 # Extras
 yt_transcript.json
 yt_transcript_scope.txt
+wright-requestly-api-tests
