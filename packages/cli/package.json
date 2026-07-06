@@ -7,7 +7,9 @@
     "dev": "bun run --watch src/index.tsx"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.17",
+    "@wright/server": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -15,9 +17,11 @@
   "dependencies": {
     "@opentui/core": "^0.4.1",
     "@opentui/react": "^0.4.1",
-    "@types/react": "^19.2.17",
+    "@wright/shared": "workspace:*",
+    "hono": "^4.12.27",
     "opentui-spinner": "^0.0.7",
     "react": "^19.2.7",
-    "react-router": "^8.1.0"
+    "react-router": "^8.1.0",
+    "zod": "^4.4.3"
   }
 }

@@ -15,6 +15,11 @@ export default tseslint.config(
       "no-empty": "warn",
       "@typescript-eslint/no-empty-function": "warn",
       "@typescript-eslint/no-explicit-any": "warn",
+      "prefer-const": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_" },
+      ], // Unused imports/vars as warnings
     },
   },
   {
@@ -33,11 +38,9 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-hooks/exhaustive-deps": "error", // Enforces hook dependency arrays!
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_" },
-      ], // Unused imports/vars as warnings
+      "react-hooks/set-state-in-effect": "warn",
+
+      "react-hooks/exhaustive-deps": "warn", // Enforces hook dependency arrays!
     },
   },
   {

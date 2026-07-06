@@ -6,7 +6,7 @@ import { TextAttributes } from "@opentui/core";
 import Spinner from "./spinner";
 
 export interface SessionShellProps extends PropsWithChildren {
-  onSubmit(text: string): void;
+  onSubmit(): void;
   inputDisabled?: boolean;
   loading?: boolean;
 }
