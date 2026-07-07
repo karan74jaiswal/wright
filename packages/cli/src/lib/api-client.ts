@@ -1,7 +1,4 @@
-import type { AppType } from "@wright/server";
+import { createTRPCReact } from "@trpc/react-query";
+import type { AppRouter } from "@wright/api-gateway";
 
-import { hc } from "hono/client";
-
-export const apiClient = hc<AppType>(
-  process.env.API_URL ?? "http://localhost:3000/",
-);
+export const trpc = createTRPCReact<AppRouter>();

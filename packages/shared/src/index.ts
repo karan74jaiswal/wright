@@ -19,3 +19,5 @@ export {
 } from "./schemas";
 
 export type { MessagePart, ChatStreamEvent } from "./schemas";
+
+export * from "./trpc";

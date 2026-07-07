@@ -10,7 +10,7 @@ This project aims to deliver a production-ready, highly extensible AI developer 
 ## Step 1 
 For now we want to setup all the services needed for this. The Architecture looks as follows - 
  - **Terminal UI (Frontend)** - A CLI frontend built using Open Tui and React bindings for rendering components in the terminal.
- - **Backend Server** - A Hono-based backend server that handles API requests, real-time streaming (SSE), and business logic.
+ - **Backend Server** - An Express and tRPC-based backend server that handles API requests, real-time streaming (SSE), and business logic.
  - **Shared Package** - A shared types and schemas package for consistency across the monorepo.
  - **Database Layer** - A dedicated database package to manage state, users, and sessions.
  - **Billing (Polar)** - Integration with Polar for a credits-based SaaS billing system (metering token usage).
