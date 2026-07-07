@@ -1,29 +1,27 @@
-import { InputBar } from "../components/input-bar";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useTheme } from "../providers/theme";
 import SessionShell from "../components/session-shell";
 import { z } from "zod";
 import { UserMsg, BotMsg, ErrorMsg } from "../components/messages";
-import type { InferResponseType } from "hono";
 import { useToast } from "../providers/toast";
-import { apiClient } from "../lib/api-client";
-import { getErrorMessage } from "../lib/https-errors";
+import { trpc } from "../lib/api-client";
 import { ToastVariant } from "../providers/toast/types";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@wright/api-gateway";
 
-type SessionData = InferResponseType<
-  (typeof apiClient.sessions)[":id"]["$get"],
-  200
->;
+type SessionData = inferRouterOutputs<AppRouter>["session"]["getSession"];
 
 const sessionLocationSchema = z.object({
   session: z.custom<SessionData>(
     (val) => val !== null && typeof val === "object" && "id" in val,
   ),
 });
+
 interface ChatMessageProps {
   msg: SessionData["messages"][number];
 }
+
 function ChatMessage({ msg }: ChatMessageProps) {
   if (msg.role === "USER") return <UserMsg message={msg.content} />;
   if (msg.role === "ERROR") return <ErrorMsg message={msg.content} />;
@@ -43,44 +41,33 @@ const Session = () => {
     return parsed.data.session;
   }, [location.state]);
 
-  const [session, setSession] = useState<SessionData | null>(prefetched);
+  const {
+    data: rawSession,
+    isError,
+    error,
+  } = trpc.session.getSession.useQuery(
+    { id: id! },
+    {
+      initialData: prefetched || undefined,
+      enabled: !!id,
+      staleTime: Infinity,
+    },
+  );
+
+  const session = rawSession as SessionData | undefined;
 
   useEffect(() => {
-    if (prefetched) return;
-    setSession(null);
-
-    if (!id) return;
-
-    let ignore = false;
-
-    async function getSession() {
-      try {
-        const res = await apiClient.sessions[":id"].$get({
-          param: {
-            id: id as string,
-          },
-        });
-        if (ignore) return;
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-        setSession(await res.json());
-      } catch (err) {
-        if (ignore) return;
-        toast.show({
-          variant: ToastVariant.ERROR,
-          message:
-            err instanceof Error ? err.message : "Failed to load session",
-        });
-        navigate("/", { replace: true });
-      }
+    if (isError) {
+      toast.show({
+        variant: ToastVariant.ERROR,
+        message: error?.message || "Failed to load session",
+      });
+      navigate("/", { replace: true });
     }
+  }, [isError, error, navigate, toast]);
 
-    getSession();
-    return () => {
-      ignore = true;
-    };
-  }, [id, navigate, prefetched, toast]);
-
-  if (!session) return <SessionShell onSubmit={() => {}} inputDisabled />;
+  if (!session)
+    return <SessionShell onSubmit={() => {}} inputDisabled loading />;
 
   return (
     <SessionShell onSubmit={() => {}} inputDisabled>

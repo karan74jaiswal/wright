@@ -1,37 +1,35 @@
-import { useCallback, useRef, useEffect, useState } from "react";
-
+import { useCallback, useRef } from "react";
 import { useDialog } from "../providers/dialog";
-
 import DialogSearchList from "../components/dialog/dialog-search-list";
-import type { InferResponseType } from "hono";
-import { apiClient } from "../lib/api-client";
-import { getErrorMessage } from "../lib/https-errors";
+import { trpc } from "../lib/api-client";
+import { useNavigate } from "react-router";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@wright/api-gateway";
 
-type SessionsList = InferResponseType<(typeof apiClient.sessions)["$get"], 200>;
+type SessionsList = inferRouterOutputs<AppRouter>["session"]["listSessions"];
+type SessionItem = SessionsList[number];
+
 export default function SessionsDialog() {
-  const [sessions, setSessions] = useState<SessionsList>([]);
+  const { data: sessions = [] } = trpc.session.listSessions.useQuery();
   const { close } = useDialog();
+  const confirmedRef = useRef(false);
 
-  useEffect(() => {
-    async function fetchSessionList() {
-      try {
-        const res = await apiClient.sessions.$get();
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-      } catch (err) {}
-    }
-  });
+  const navigate = useNavigate();
+
   const handleSelect = useCallback(
-    (theme: Theme) => {
+    (session: SessionItem) => {
       confirmedRef.current = true;
-      setTheme(theme);
+      navigate(`/sessions/${session.id}`);
       close();
     },
-    [close, setTheme],
+    [close, navigate],
   );
 
   const handleHighlight = useCallback(
-    (theme: Theme) => setTheme(theme),
-    [setTheme],
+    (session: SessionItem) => {
+      // TODO: add highlight logic
+    },
+    [],
   );
 
   return (
@@ -45,12 +43,12 @@ export default function SessionsDialog() {
       filterFn={(session, query) =>
         session.title.toLowerCase().includes(query.toLowerCase())
       }
-      renderItem={(theme, isSelected) => (
+      renderItem={(session, isSelected) => (
         <text selectable={false} fg={isSelected ? "black" : "white"}>
-          {theme.name === currentTheme.name
+          {isSelected
             ? "\u0020\u2022\u0020"
             : "\u0020\u0020\u0020"}
-          {theme.name}
+          {session.title}
         </text>
       )}
     />

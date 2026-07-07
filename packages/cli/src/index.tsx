@@ -6,6 +6,10 @@ import Home from "./screens/home";
 import NewSession from "./screens/new-session";
 import Session from "./screens/session";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink } from "@trpc/client";
+import { trpc } from "./lib/api-client";
+
 const router = createMemoryRouter([
   {
     path: "/",
@@ -27,8 +31,22 @@ const router = createMemoryRouter([
   },
 ]);
 
+const queryClient = new QueryClient();
+const trpcClient = trpc.createClient({
+  links: [
+    httpBatchLink({
+      url: process.env.API_URL ?? "http://localhost:3000/api",
+    }),
+  ],
+});
 function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </trpc.Provider>
+  );
 }
 
 const renderer = await createCliRenderer({

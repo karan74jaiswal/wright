@@ -2,8 +2,10 @@
   "name": "wright",
   "version": "1.0.0",
   "scripts": {
-    "dev:cli": "bun run --watch packages/cli/src/index.tsx",
-    "dev:server": "bun run --hot packages/server/src/index.ts"
+    "dev:cli": "cd packages/cli && bun run dev",
+    "dev:session": "cd packages/session-service && bun run dev",
+    "dev:gateway": "cd packages/api-gateway && bun run dev",
+    "dev:backend": "bun run dev:session & bun run dev:gateway"
   },
   "workspaces": [
     "packages/*"
@@ -14,5 +16,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
     "typescript-eslint": "^8.62.1"
+  },
+  "intent": {
+    "skills": [
+      "@tanstack/query",
+      "@trpc/server",
+      "@trpc/client"
+    ]
   }
 }

@@ -1,0 +1,23 @@
+{
+  "name": "@wright/api-gateway",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/server.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^4.2.0",
+    "@wright/shared": "workspace:*",
+    "@wright/session-service": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6"
+  }
+}
