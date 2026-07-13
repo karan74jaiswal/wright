@@ -92,7 +92,7 @@ export const sessionRouter = router({
         ...session,
         messages: session.messages.map((m) => ({
           ...m,
-          parts: m.parts as unknown,
+          toolCalls: m.toolCalls as unknown,
         })),
       };
     }),
@@ -135,9 +135,9 @@ export const sessionRouter = router({
         return {
           ...session,
           messages: session.messages.map((m) => ({
-            ...m,
-            parts: m.parts as unknown,
-          })),
+          ...m,
+          toolCalls: m.toolCalls as unknown,
+        })),
         };
       } catch (error) {
         Sentry.captureException(error);

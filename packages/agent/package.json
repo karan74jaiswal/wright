@@ -1,0 +1,24 @@
+{
+  "name": "@wright/agent",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "latest",
+    "@langchain/core": "latest",
+    "@langchain/google": "^0.2.1",
+    "@langchain/langgraph": "latest",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
+    "@langchain/openai": "latest",
+    "@wright/database": "workspace:*",
+    "@wright/shared": "workspace:*",
+    "pg": "^8.22.0",
+    "zod": "^4.4.3",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/pg": "^8.20.0"
+  }
+}

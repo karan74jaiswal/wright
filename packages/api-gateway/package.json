@@ -13,7 +13,8 @@
     "express": "^5.2.1",
     "http-proxy-middleware": "^4.2.0",
     "@wright/shared": "workspace:*",
-    "@wright/session-service": "workspace:*"
+    "@wright/session-service": "workspace:*",
+    "@wright/chat-service": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
