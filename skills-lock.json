@@ -79,6 +79,12 @@
       "skillPath": "config/skills/managed-deep-agents/SKILL.md",
       "computedHash": "6a2be0785d4e042947d27e0a67abb75f4a705de443d1f372c53970e37cd0fd2a"
     },
+    "opentui": {
+      "source": "anomalyco/opentui",
+      "sourceType": "github",
+      "skillPath": "packages/web/src/content/SKILL.md",
+      "computedHash": "91564dd09a740dde98c81e0668664d32c2ed77551c3139e3552d4906b8e3ecba"
+    },
     "sentry-android-sdk": {
       "source": "getsentry/sentry-for-ai",
       "sourceType": "github",

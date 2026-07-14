@@ -10,8 +10,8 @@ export async function* streamAgent(
   input: ChatRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const { sessionId, message, resume, model, mode } = input;
-  
+  const { sessionId, message, resume, model, mode, isAutoResume } = input;
+
   let startTime = Date.now();
   let fullText = "";
 
@@ -38,7 +38,7 @@ export async function* streamAgent(
   try {
     await setupCheckpointer();
 
-    if (message) {
+    if (message && !isAutoResume) {
       await db.message.create({
         data: {
           sessionId,
@@ -58,7 +58,16 @@ export async function* streamAgent(
       configurable: { thread_id: sessionId, modelId: model, mode },
     };
 
-    const runInput = (resume ? new Command({ resume }) : { messages: newMessages }) as any;
+    const currentState = await graph.getState(config);
+    const hasState = Object.keys(currentState.values).length > 0;
+
+    const runInput = (
+      resume
+        ? new Command({ resume })
+        : (!isAutoResume || !hasState) && message
+          ? { messages: newMessages }
+          : null
+    ) as any;
 
     const eventStream = (await graph.streamEvents(runInput, {
       version: "v3",
@@ -175,15 +184,17 @@ export async function* streamAgent(
     }
 
     const finalState = await graph.getState(config);
-    const interruptedTask = finalState.tasks?.find(t => t.interrupts && t.interrupts.length > 0);
-    
+    const interruptedTask = finalState.tasks?.find(
+      (t) => t.interrupts && t.interrupts.length > 0,
+    );
+
     if (interruptedTask) {
       const interrupts = interruptedTask.interrupts;
       if (interrupts && interrupts.length > 0) {
         const payload = interrupts[0]?.value;
         if (payload !== undefined) {
           yield { type: "interrupt", payload } as ChatStreamEvent;
-          return; 
+          return;
         }
       }
     }
@@ -213,7 +224,7 @@ export async function* streamAgent(
         },
       });
     } catch (dbErr) {
-       console.error("Failed to persist error message:", dbErr);
+      console.error("Failed to persist error message:", dbErr);
     }
 
     yield { type: "error", message: errorMsg } as ChatStreamEvent;

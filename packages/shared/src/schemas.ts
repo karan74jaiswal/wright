@@ -63,6 +63,7 @@ export const chatRequestSchema = z.object({
   resume: z.any().optional(),
   model: z.string().min(1, "Model ID is required"),
   mode: z.enum(["BUILD", "PLAN"]).default("BUILD"),
+  isAutoResume: z.boolean().optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

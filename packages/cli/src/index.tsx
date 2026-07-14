@@ -5,10 +5,13 @@ import RootLayout from "./layouts/root-layout";
 import Home from "./screens/home";
 import NewSession from "./screens/new-session";
 import Session from "./screens/session";
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
-import { trpc } from "./lib/api-client";
+import { httpBatchLink, httpSubscriptionLink, splitLink, createTRPCClient } from "@trpc/client";
+import { TRPCProvider } from "./lib/api-client";
+import type { AppRouter } from "@wright/api-gateway";
+import { EventSource } from "eventsource";
+
+const url = process.env.API_URL ?? "http://localhost:3000/api";
 
 const router = createMemoryRouter([
   {
@@ -32,20 +35,23 @@ const router = createMemoryRouter([
 ]);
 
 const queryClient = new QueryClient();
-const trpcClient = trpc.createClient({
+const trpcClient = createTRPCClient<AppRouter>({
   links: [
-    httpBatchLink({
-      url: process.env.API_URL ?? "http://localhost:3000/api",
+    splitLink({
+      condition: (op) => op.type === "subscription",
+      true: httpSubscriptionLink({ url, EventSource: EventSource as any }),
+      false: httpBatchLink({ url }),
     }),
   ],
 });
 function App() {
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      {/* @ts-expect-error type mismatch with older @types/react */}
+      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
         <RouterProvider router={router} />
-      </QueryClientProvider>
-    </trpc.Provider>
+      </TRPCProvider>
+    </QueryClientProvider>
   );
 }
 

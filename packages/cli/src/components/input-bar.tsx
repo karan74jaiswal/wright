@@ -13,6 +13,7 @@ import { useKeyboardLayer } from "../providers/keyboard";
 import { useDialog } from "../providers/dialog";
 
 import { useTheme } from "../providers/theme";
+import { useNavigate } from "react-router";
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
@@ -45,6 +46,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
   const renderer = useRenderer();
   const toast = useToast();
   const dialog = useDialog();
+  const navigate = useNavigate();
   const { isTopLayer, setResponder } = useKeyboardLayer();
   const { colors } = useTheme();
   const {
@@ -82,12 +84,13 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
           exit: () => renderer.destroy(),
           toast,
           dialog,
+          navigate,
         });
       else {
         textAreaRef.current.insertText(`${cmd.value} `);
       }
     },
-    [renderer, toast, dialog],
+    [renderer, toast, dialog, navigate],
   );
 
   const handleCommandExecute = useCallback(
