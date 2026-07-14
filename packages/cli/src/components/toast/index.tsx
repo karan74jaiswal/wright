@@ -10,6 +10,7 @@ interface ToastProps {
 const Toast = ({ currentToast }: ToastProps) => {
   const { colors } = useTheme();
   const { width: terminalWidth } = useTerminalDimensions();
+  console.log(currentToast);
 
   if (!currentToast) return null;
 

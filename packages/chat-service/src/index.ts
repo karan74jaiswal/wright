@@ -1,9 +1,9 @@
 import { router } from "@wright/shared";
-import { sessionRouter } from "@wright/session-service";
-import { chatRouter } from "@wright/chat-service";
+import { chatRouter } from "./router";
+
+export { chatRouter } from "./router";
 
 export const appRouter = router({
-  session: sessionRouter,
   chat: chatRouter,
 });
 

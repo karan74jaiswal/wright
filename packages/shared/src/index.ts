@@ -13,11 +13,12 @@ export type {
 
 export {
   toolCallArgsSchema,
-  messagePartSchema,
-  messagePartsSchema,
+  toolCallSchema,
+  baseMessageSchema,
   chatStreamEventSchema,
+  chatRequestSchema,
 } from "./schemas";
 
-export type { MessagePart, ChatStreamEvent } from "./schemas";
+export type { ToolCall, BaseMessage, ChatStreamEvent, ChatRequest } from "./schemas";
 
 export * from "./trpc";

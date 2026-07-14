@@ -25,7 +25,7 @@ export const UserMsg = ({ message }: UserMsgProps) => {
           backgroundColor={colors.surface}
           width="100%"
         >
-          <text>{message}</text>
+          <text>{message || ""}</text>
         </box>
       </box>
     </box>

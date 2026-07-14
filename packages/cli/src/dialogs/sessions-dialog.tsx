@@ -1,7 +1,8 @@
 import { useCallback, useRef } from "react";
 import { useDialog } from "../providers/dialog";
 import DialogSearchList from "../components/dialog/dialog-search-list";
-import { trpc } from "../lib/api-client";
+import { useTRPC } from "../lib/api-client";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
@@ -10,7 +11,10 @@ type SessionsList = inferRouterOutputs<AppRouter>["session"]["listSessions"];
 type SessionItem = SessionsList[number];
 
 export default function SessionsDialog() {
-  const { data: sessions = [] } = trpc.session.listSessions.useQuery();
+  const trpc = useTRPC();
+  const { data: sessions = [] } = useQuery(
+    trpc.session.listSessions.queryOptions(),
+  );
   const { close } = useDialog();
   const confirmedRef = useRef(false);
 
@@ -25,12 +29,9 @@ export default function SessionsDialog() {
     [close, navigate],
   );
 
-  const handleHighlight = useCallback(
-    (session: SessionItem) => {
-      // TODO: add highlight logic
-    },
-    [],
-  );
+  const handleHighlight = useCallback((session: SessionItem) => {
+    // TODO: add highlight logic
+  }, []);
 
   return (
     <DialogSearchList
@@ -41,13 +42,12 @@ export default function SessionsDialog() {
       placeholder="Search Sessions..."
       emptyText="No matching Sessions"
       filterFn={(session, query) =>
-        session.title.toLowerCase().includes(query.toLowerCase())
+        session.title.toLowerCase().includes(query.toLowerCase()) ||
+        session.id.toLowerCase().includes(query)
       }
       renderItem={(session, isSelected) => (
         <text selectable={false} fg={isSelected ? "black" : "white"}>
-          {isSelected
-            ? "\u0020\u2022\u0020"
-            : "\u0020\u0020\u0020"}
+          {isSelected ? "\u0020\u2022\u0020" : "\u0020\u0020\u0020"}
           {session.title}
         </text>
       )}

@@ -12,12 +12,21 @@ const port = 3000;
 
 app.use(cors());
 
-// Proxy /api to session-service on port 3001
+// Proxy /api/session.* to session-service on port 3001
 app.use(
-  "/api",
   createProxyMiddleware({
-    target: "http://localhost:3001/api",
+    target: "http://localhost:3001",
     changeOrigin: true,
+    pathFilter: (pathname, req) => /^\/api\/session(?:[./]|$)/.test(pathname),
+  }),
+);
+
+// Proxy /api/chat.* to chat-service on port 3002
+app.use(
+  createProxyMiddleware({
+    target: "http://localhost:3002",
+    changeOrigin: true,
+    pathFilter: (pathname, req) => /^\/api\/chat(?:[./]|$)/.test(pathname),
   }),
 );
 
@@ -26,6 +35,7 @@ app.get("/", (req, res) => {
 });
 
 const server = http.createServer(app);
+server.setTimeout(0);
 
 server.listen(port, () => {
   console.log(`API Gateway listening on port ${port}`);

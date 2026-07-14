@@ -1,4 +1,4 @@
-import { ThemeDialog } from "../../dialogs";
+import { ThemeDialog, SessionsDialog } from "../../dialogs";
 import { ToastVariant } from "../../providers/toast/types";
 import type { Command } from "./types";
 
@@ -7,21 +7,19 @@ export const COMMANDS: Command[] = [
     name: "new",
     description: "Start a new conversation",
     value: "/new",
-    action: (ctx) => ctx.toast.show({ message: "Starting a new Conversation" }),
+    action: (ctx) => {
+      ctx.toast.show({ message: "Starting a new Conversation" });
+      ctx.navigate("/sessions/new");
+    },
   },
-
   {
     name: "agents",
     description: "Switch agents",
     value: "/agents",
     action: (ctx) => {
-      ctx.toast.show({
-        message: "Switching Agents",
-      });
-
       ctx.dialog.open({
-        title: "Select Mode",
-        children: <text>Agent Selection Coming Soon...</text>,
+        title: "Agent Selection",
+        children: <box padding={1}><text>Agent Selection Coming Soon...</text></box>,
       });
     },
   },
@@ -30,10 +28,9 @@ export const COMMANDS: Command[] = [
     description: "Select AI model for generation",
     value: "/models",
     action: (ctx) => {
-      ctx.toast.show({ message: "Selecting Model..." });
       ctx.dialog.open({
-        children: <text>Model Selection coming soon...</text>,
-        title: "Select Models",
+        children: <box padding={1}><text>Model Selection coming soon...</text></box>,
+        title: "Select Model",
       });
     },
   },
@@ -46,8 +43,8 @@ export const COMMANDS: Command[] = [
         message: "Loading Sessions...",
       });
       ctx.dialog.open({
-        title: "Select Mode",
-        children: <text>Sessions Selection Coming Soon...</text>,
+        title: "Select Session",
+        children: <SessionsDialog />,
       });
     },
   },
@@ -93,12 +90,9 @@ export const COMMANDS: Command[] = [
     description: "Open billing portal in your browser",
     value: "/usage",
     action: (ctx) => {
-      ctx.toast.show({
-        message: "Opening Billing portal",
-      });
       ctx.dialog.open({
-        title: "Usage",
-        children: <text>Usage Monitoring coming soon...</text>,
+        title: "Usage & Billing",
+        children: <box padding={1}><text>Usage Monitoring coming soon...</text></box>,
       });
     },
   },
@@ -108,4 +102,71 @@ export const COMMANDS: Command[] = [
     value: "/exit",
     action: (ctx) => ctx.exit(),
   },
+  {
+    name: "goal",
+    description: "Run a long-running, thorough background task",
+    value: "/goal",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Goal Command",
+        children: <box padding={1}><text>Goal configuration coming soon...</text></box>,
+      });
+    },
+  },
+  {
+    name: "schedule",
+    description: "Set a recurring schedule or timer",
+    value: "/schedule",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Schedule Command",
+        children: <box padding={1}><text>Schedule configuration coming soon...</text></box>,
+      });
+    },
+  },
+  {
+    name: "plan",
+    description: "Step-by-step task planning",
+    value: "/plan",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Plan Command",
+        children: <box padding={1}><text>Planning interface coming soon...</text></box>,
+      });
+    },
+  },
+  {
+    name: "grill-me",
+    description: "Interactive interview for design decisions",
+    value: "/grill-me",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Grill Me",
+        children: <box padding={1}><text>Interactive interview coming soon...</text></box>,
+      });
+    },
+  },
+  {
+    name: "teamwork-preview",
+    description: "Multi-agent autonomous teamwork",
+    value: "/teamwork-preview",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Teamwork Preview",
+        children: <box padding={1}><text>Teamwork preview coming soon...</text></box>,
+      });
+    },
+  },
+  {
+    name: "learn",
+    description: "Persist learned context for future tasks",
+    value: "/learn",
+    action: (ctx) => {
+      ctx.dialog.open({
+        title: "Learn",
+        children: <box padding={1}><text>Learning preferences coming soon...</text></box>,
+      });
+    },
+  },
 ];
+

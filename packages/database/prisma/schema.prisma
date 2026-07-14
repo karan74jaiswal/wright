@@ -15,6 +15,8 @@ datasource db {
 enum Role {
   USER
   ASSISTANT
+  SYSTEM
+  TOOL
   ERROR
 }
 
@@ -41,17 +43,18 @@ model Session {
 }
 
 model Message {
-  id        String        @id @default(cuid())
-  sessionId String
-  role      Role
-  status    MessageStatus
-  model     String
-  content   String
-  parts     Json?
-  mode      Mode
-  duration  Int?
-  createdAt DateTime      @default(now())
-  session   Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id         String        @id @default(cuid())
+  sessionId  String
+  role       Role
+  status     MessageStatus
+  model      String
+  content    String
+  toolCalls  Json?          // Stores LangChain tool_calls array
+  toolCallId String?        // Used when role is TOOL
+  mode       Mode
+  duration   Int?
+  createdAt  DateTime      @default(now())
+  session    Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
 }

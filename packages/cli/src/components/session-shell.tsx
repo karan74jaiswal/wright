@@ -2,11 +2,14 @@ import { type PropsWithChildren } from "react";
 
 import { InputBar } from "./input-bar";
 import { TextAttributes } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 
 import Spinner from "./spinner";
+import { useKeyboardLayer } from "../providers/keyboard";
 
 export interface SessionShellProps extends PropsWithChildren {
-  onSubmit(): void;
+  onSubmit(text: string): void;
+  onCancel?(): void;
   inputDisabled?: boolean;
   loading?: boolean;
 }
@@ -14,9 +17,18 @@ export interface SessionShellProps extends PropsWithChildren {
 const SessionShell = ({
   children,
   onSubmit,
+  onCancel,
   inputDisabled = false,
   loading = false,
 }: SessionShellProps) => {
+  const { isTopLayer } = useKeyboardLayer();
+
+  useKeyboard((key) => {
+    if (key.name == "escape" && loading && onCancel && isTopLayer("base")) {
+      onCancel();
+    }
+  });
+
   return (
     <box
       flexDirection="column"
@@ -46,6 +58,12 @@ const SessionShell = ({
           {loading ? <Spinner /> : null}
         </box>
         <box flexDirection="row" gap={1} flexShrink={0} marginLeft="auto">
+          {loading ? (
+            <box flexDirection="row" gap={1} marginRight={2}>
+              <text>esc</text>
+              <text attributes={TextAttributes.DIM}>cancel</text>
+            </box>
+          ) : null}
           <text>tab</text>
           <text attributes={TextAttributes.DIM}>agents</text>
         </box>

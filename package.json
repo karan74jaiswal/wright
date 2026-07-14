@@ -4,8 +4,9 @@
   "scripts": {
     "dev:cli": "cd packages/cli && bun run dev",
     "dev:session": "cd packages/session-service && bun run dev",
+    "dev:chat": "cd packages/chat-service && bun run dev",
     "dev:gateway": "cd packages/api-gateway && bun run dev",
-    "dev:backend": "bun run dev:session & bun run dev:gateway"
+    "dev:backend": "bun run dev:session & bun run dev:chat & bun run dev:gateway"
   },
   "workspaces": [
     "packages/*"

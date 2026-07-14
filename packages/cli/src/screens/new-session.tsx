@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from "react-router";
 import { useEffect, useMemo, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { UserMsg } from "../components/messages";
 import SessionShell from "../components/session-shell";
 import { z } from "zod";
-import { trpc } from "../lib/api-client";
+import { useTRPC } from "../lib/api-client";
 import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
 import { useToast } from "../providers/toast";
 import { ToastVariant } from "../providers/toast/types";
@@ -33,7 +34,8 @@ const NewSession = () => {
       });
   }, [state, navigate]);
 
-  const createSessionMutation = trpc.session.createSession.useMutation();
+  const trpc = useTRPC();
+  const createSessionMutation = useMutation(trpc.session.createSession.mutationOptions());
 
   useEffect(() => {
     if (!state || hasStartedRef.current) return;
@@ -52,6 +54,11 @@ const NewSession = () => {
       },
       {
         onSuccess: (session) => {
+          toast.show({
+            variant: ToastVariant.SUCCESS,
+            message: "New Session Created",
+          });
+          // console.log(session);
           navigate(`/sessions/${session.id}`, {
             state: { session },
             replace: true,
