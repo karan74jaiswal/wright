@@ -99,6 +99,7 @@ export function useChat({
       {
         enabled: !!activeRequest && !!sessionId,
         onData(event) {
+          console.log("event");
           if (event.type === "text-delta") {
             setStreamedContent((prev) => prev + event.text);
           } else if (event.type === "reasoning-delta") {
@@ -127,7 +128,7 @@ export function useChat({
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
-              .catch(() => {})
+              .catch((e) => console.error("Failed to invalidate queries:", e))
               .finally(() => {
                 setActiveRequest(null);
                 setStreamedContent("");
@@ -140,7 +141,7 @@ export function useChat({
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
-              .catch(() => {})
+              .catch((e) => console.error("Failed to invalidate queries:", e))
               .finally(() => {
                 setActiveRequest(null);
                 setStreamedContent("");
@@ -151,11 +152,16 @@ export function useChat({
           }
         },
         onError(err) {
+          console.error("Subscription Error:", err);
+          toast.show({
+            variant: ToastVariant.ERROR,
+            message: err.message || "Failed to connect to chat service",
+          });
           queryClient
             .invalidateQueries(
               trpc.session.getSession.queryOptions({ id: sessionId }),
             )
-            .catch(() => {})
+            .catch((e) => console.error("Failed to invalidate queries:", e))
             .finally(() => {
               setActiveRequest(null);
               setStreamedContent("");
@@ -213,7 +219,7 @@ export function useChat({
       .invalidateQueries(
         trpc.session.getSession.queryOptions({ id: sessionId }),
       )
-      .catch(() => {})
+      .catch((e) => console.error("Failed to invalidate queries:", e))
       .finally(() => {
         setStreamedContent("");
         setStreamedReasoning("");
@@ -249,6 +255,6 @@ export function useChat({
       sendMessage,
       submitInterrupt,
       stop,
-    ]
+    ],
   );
 }
