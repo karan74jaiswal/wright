@@ -54,7 +54,7 @@ export const askQuestion = tool(
     description: "Ask the user a multiple-choice question to clarify requirements, solicit feedback, or pick an option.",
     schema: z.object({
       question: z.string().describe("The question to ask"),
-      options: z.array(z.string()).describe("The options to present to the user"),
+      options: z.array(z.string()).min(1).describe("The options to present to the user"),
       isMultiSelect: z.boolean().optional().describe("If true, the user can select multiple options"),
     })
   }

@@ -5,6 +5,7 @@ import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 
 import Spinner from "./spinner";
+import { useKeyboardLayer } from "../providers/keyboard";
 
 export interface SessionShellProps extends PropsWithChildren {
   onSubmit(text: string): void;
@@ -20,8 +21,10 @@ const SessionShell = ({
   inputDisabled = false,
   loading = false,
 }: SessionShellProps) => {
+  const { isTopLayer } = useKeyboardLayer();
+
   useKeyboard((key) => {
-    if (key.name == "escape" && loading && onCancel) {
+    if (key.name == "escape" && loading && onCancel && isTopLayer("base")) {
       onCancel();
     }
   });

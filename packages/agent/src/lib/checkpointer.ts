@@ -2,7 +2,7 @@ import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { Pool } from "pg";
 
 let checkpointer: PostgresSaver | null = null;
-let isSetup = false;
+let setupPromise: Promise<void> | null = null;
 
 export function getCheckpointer() {
   if (!checkpointer) {
@@ -18,10 +18,10 @@ export function getCheckpointer() {
   return checkpointer;
 }
 
-export async function setupCheckpointer() {
-  if (!isSetup) {
+export function setupCheckpointer(): Promise<void> {
+  if (!setupPromise) {
     const cp = getCheckpointer();
-    await cp.setup();
-    isSetup = true;
+    setupPromise = cp.setup();
   }
+  return setupPromise;
 }

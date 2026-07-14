@@ -116,63 +116,73 @@ export async function* streamAgent(
           lastMsg.id &&
           !savedMessageIds.has(lastMsg.id as string)
         ) {
-          savedMessageIds.add(lastMsg.id as string);
+          const msgId = lastMsg.id as string;
+          savedMessageIds.add(msgId);
           const msgType = lastMsg.getType ? lastMsg.getType() : lastMsg.type;
 
-          if (msgType === "ai") {
-            const elapsedMs = Date.now() - startTime;
-            const contentToSave =
-              typeof lastMsg.content === "string"
-                ? lastMsg.content
-                : JSON.stringify(lastMsg.content);
-            fullText = contentToSave;
+          // Cross-run deduplication: Check if this message was already persisted in a prior run (e.g. before an interrupt)
+          const existingMsg = await db.message.findUnique({
+            where: { id: msgId },
+          });
 
-            let toolCallsToSave = null;
-            if (
-              (lastMsg as any).tool_calls &&
-              (lastMsg as any).tool_calls.length > 0
-            ) {
-              toolCallsToSave = (lastMsg as any).tool_calls;
+          if (!existingMsg) {
+            if (msgType === "ai") {
+              const elapsedMs = Date.now() - startTime;
+              const contentToSave =
+                typeof lastMsg.content === "string"
+                  ? lastMsg.content
+                  : JSON.stringify(lastMsg.content);
+              fullText = contentToSave;
+
+              let toolCallsToSave = null;
+              if (
+                (lastMsg as any).tool_calls &&
+                (lastMsg as any).tool_calls.length > 0
+              ) {
+                toolCallsToSave = (lastMsg as any).tool_calls;
+              }
+
+              await db.message.create({
+                data: {
+                  id: msgId,
+                  sessionId,
+                  role: Role.ASSISTANT,
+                  content: contentToSave || "",
+                  toolCalls: toolCallsToSave,
+                  model,
+                  mode: mode as Mode,
+                  status: MessageStatus.COMPLETED,
+                  duration: Math.round(elapsedMs / 1000),
+                },
+              });
             }
 
-            await db.message.create({
-              data: {
-                sessionId,
-                role: Role.ASSISTANT,
-                content: contentToSave || "",
-                toolCalls: toolCallsToSave,
-                model,
-                mode: mode as Mode,
-                status: MessageStatus.COMPLETED,
-                duration: Math.round(elapsedMs / 1000),
-              },
-            });
-          }
+            if (msgType === "tool") {
+              const contentToSave =
+                typeof lastMsg.content === "string"
+                  ? lastMsg.content
+                  : JSON.stringify(lastMsg.content);
+              const toolCallId = lastMsg.tool_call_id || "unknown";
 
-          if (msgType === "tool") {
-            const contentToSave =
-              typeof lastMsg.content === "string"
-                ? lastMsg.content
-                : JSON.stringify(lastMsg.content);
-            const toolCallId = lastMsg.tool_call_id || "unknown";
+              await db.message.create({
+                data: {
+                  id: msgId,
+                  sessionId,
+                  role: Role.TOOL,
+                  content: contentToSave,
+                  toolCallId,
+                  model,
+                  mode: mode as Mode,
+                  status: MessageStatus.COMPLETED,
+                },
+              });
 
-            await db.message.create({
-              data: {
-                sessionId,
-                role: Role.TOOL,
-                content: contentToSave,
+              yield {
+                type: "tool-result",
                 toolCallId,
-                model,
-                mode: mode as Mode,
-                status: MessageStatus.COMPLETED,
-              },
-            });
-
-            yield {
-              type: "tool-result",
-              toolCallId,
-              result: contentToSave,
-            } as ChatStreamEvent;
+                result: contentToSave,
+              } as ChatStreamEvent;
+            }
           }
         }
       }

@@ -33,10 +33,12 @@ const chatValidatorMiddleware = middleware(async ({ next, path }) => {
 
 // Middleware to ensure the provided session ID actually exists
 const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
-  const input = (await getRawInput()) as any;
-  if (input && input.sessionId) {
+  const rawInput = await getRawInput();
+  const parsed = z.object({ sessionId: z.string() }).safeParse(rawInput);
+  
+  if (parsed.success) {
     const session = await db.session.findUnique({
-      where: { id: input.sessionId },
+      where: { id: parsed.data.sessionId },
     });
     if (!session) {
       throw new TRPCError({

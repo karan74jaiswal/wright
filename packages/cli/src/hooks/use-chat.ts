@@ -127,7 +127,8 @@ export function useChat({
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
-              .then(() => {
+              .catch(() => {})
+              .finally(() => {
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -139,7 +140,8 @@ export function useChat({
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
-              .then(() => {
+              .catch(() => {})
+              .finally(() => {
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -149,11 +151,18 @@ export function useChat({
           }
         },
         onError(err) {
-          setActiveRequest(null);
-          setStreamedContent("");
-          setStreamedReasoning("");
-          setActiveToolCalls({});
-          setStatus("error");
+          queryClient
+            .invalidateQueries(
+              trpc.session.getSession.queryOptions({ id: sessionId }),
+            )
+            .catch(() => {})
+            .finally(() => {
+              setActiveRequest(null);
+              setStreamedContent("");
+              setStreamedReasoning("");
+              setActiveToolCalls({});
+              setStatus("error");
+            });
         },
       },
     ),
@@ -204,7 +213,8 @@ export function useChat({
       .invalidateQueries(
         trpc.session.getSession.queryOptions({ id: sessionId }),
       )
-      .then(() => {
+      .catch(() => {})
+      .finally(() => {
         setStreamedContent("");
         setStreamedReasoning("");
         setActiveToolCalls({});

@@ -16,19 +16,18 @@ export function InterruptPrompt({ payload, onSubmit }: InterruptPromptProps) {
 
   // Normalize the payload into a question and a set of options
   const { title, description, options } = useMemo(() => {
-    if (payload?.questions && Array.isArray(payload.questions)) {
+    if (payload?.type === "ask_question") {
       // It's an ask_question interrupt
-      const q = payload.questions[0];
       return {
         title: "Question from Agent",
-        description: q?.question || "Please select an option:",
-        options: q?.options || ["Continue"],
+        description: payload.question || "Please select an option:",
+        options: payload.options?.length ? payload.options : ["Continue"],
       };
-    } else if (payload?.Action || payload?.Target) {
+    } else if (payload?.type === "ask_permission") {
       // It's an ask_permission interrupt
       return {
         title: "Permission Required",
-        description: `Agent wants to perform action: ${payload.Action}\nTarget: ${payload.Target}\nReason: ${payload.Reason}`,
+        description: `Agent wants to perform an action.\nTarget: ${payload.target || "Unknown"}\nReason: ${payload.reason || "No reason provided"}`,
         options: ["Yes, approve", "No, reject"],
       };
     }

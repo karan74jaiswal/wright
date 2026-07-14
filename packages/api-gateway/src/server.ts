@@ -17,7 +17,7 @@ app.use(
   createProxyMiddleware({
     target: "http://localhost:3001",
     changeOrigin: true,
-    pathFilter: (pathname, req) => pathname.startsWith("/api/session"),
+    pathFilter: (pathname, req) => /^\/api\/session(?:[./]|$)/.test(pathname),
   }),
 );
 
@@ -26,7 +26,7 @@ app.use(
   createProxyMiddleware({
     target: "http://localhost:3002",
     changeOrigin: true,
-    pathFilter: (pathname, req) => pathname.startsWith("/api/chat"),
+    pathFilter: (pathname, req) => /^\/api\/chat(?:[./]|$)/.test(pathname),
   }),
 );
 
