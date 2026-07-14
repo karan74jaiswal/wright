@@ -173,6 +173,7 @@ const SessionInner = ({ id }: { id: string }) => {
 
 const Session = () => {
   const { id } = useParams();
+  // console.log(id);
   if (!id) return null;
   return <SessionInner key={id} id={id} />;
 };

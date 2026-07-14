@@ -54,6 +54,7 @@ export function resolveGoogleModel(modelId: GoogleModelId): ResolveModel {
     model: modelId,
     temperature: 1,
     apiKey: process.env.GOOGLE_API_KEY,
+    thinkingLevel: "HIGH",
   });
 }
 
