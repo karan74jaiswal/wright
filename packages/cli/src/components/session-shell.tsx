@@ -39,7 +39,7 @@ const SessionShell = ({
       paddingX={2}
       paddingY={1}
     >
-      <scrollbox flexGrow={1} stickyScroll stickyStart="bottom">
+      <scrollbox flexGrow={1} width="100%" stickyScroll stickyStart="bottom">
         <box gap={1}>{children}</box>
       </scrollbox>
       <box flexShrink={0}>
@@ -55,15 +55,14 @@ const SessionShell = ({
         paddingLeft={1}
       >
         <box flexDirection="row" gap={2} alignItems="center">
-          {loading ? <Spinner /> : null}
+          {loading ? (
+            <>
+              <Spinner />
+              <text>esc to interrupt</text>
+            </>
+          ) : null}
         </box>
         <box flexDirection="row" gap={1} flexShrink={0} marginLeft="auto">
-          {loading ? (
-            <box flexDirection="row" gap={1} marginRight={2}>
-              <text>esc</text>
-              <text attributes={TextAttributes.DIM}>cancel</text>
-            </box>
-          ) : null}
           <text>tab</text>
           <text attributes={TextAttributes.DIM}>agents</text>
         </box>

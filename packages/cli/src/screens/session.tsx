@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useEffect, useMemo, memo } from "react";
+import { useEffect, useMemo, memo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../providers/theme";
 import SessionShell from "../components/session-shell";
@@ -13,6 +13,8 @@ import { InterruptPrompt } from "../components/interrupt-prompt";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
 import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
+import { useKeyboardLayer } from "../providers/keyboard";
+import { useKeyboard } from "@opentui/react";
 
 type SessionData = inferRouterOutputs<AppRouter>["session"]["getSession"];
 
@@ -24,9 +26,10 @@ const sessionLocationSchema = z.object({
 
 interface ChatMessageProps {
   msg: SessionData["messages"][number];
+  showReasoning: boolean;
 }
 
-const ChatMessage = memo(function ChatMessage({ msg }: ChatMessageProps) {
+const ChatMessage = memo(function ChatMessage({ msg, showReasoning }: ChatMessageProps) {
   if (msg.role === "USER") return <UserMsg message={msg.content} />;
   if (msg.role === "ERROR") return <ErrorMsg message={msg.content} />;
   if (msg.role === "TOOL") return null;
@@ -60,7 +63,12 @@ const ChatMessage = memo(function ChatMessage({ msg }: ChatMessageProps) {
     <BotMsg
       content={displayContent}
       model={msg.model}
+      reasoning={msg.reasoning || undefined}
+      reasoningDuration={msg.reasoningDuration || undefined}
       toolCalls={parsedToolCalls}
+      mode={msg.mode}
+      duration={msg.duration}
+      showReasoning={showReasoning}
     />
   );
 });
@@ -70,6 +78,16 @@ const SessionInner = ({ id }: { id: string }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+
+  const [showReasoning, setShowReasoning] = useState(false);
+  const { isTopLayer } = useKeyboardLayer();
+
+  useKeyboard((key) => {
+    if (!isTopLayer("base")) return;
+    if (key.ctrl && key.name === "o") {
+      setShowReasoning((prev) => !prev);
+    }
+  });
 
   const prefetched = useMemo(() => {
     const parsed = sessionLocationSchema.safeParse(location.state);
@@ -136,10 +154,9 @@ const SessionInner = ({ id }: { id: string }) => {
             width="100%"
             paddingBottom={1}
           >
-            <ChatMessage msg={msg} />
+            <ChatMessage msg={msg} showReasoning={showReasoning} />
           </box>
         )),
-        status === "streaming" ||
         streamedContent ||
         streamedReasoning ||
         Object.keys(activeToolCalls).length > 0 ? (
@@ -155,6 +172,8 @@ const SessionInner = ({ id }: { id: string }) => {
               reasoning={streamedReasoning}
               toolCalls={activeToolCalls}
               streaming={status === "streaming"}
+              mode={history.at(-1)?.mode}
+              showReasoning={showReasoning}
             />
           </box>
         ) : null,

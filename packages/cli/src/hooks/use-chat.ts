@@ -189,6 +189,8 @@ export function useChat({
         mode: "BUILD",
         status: "COMPLETED",
         duration: null,
+        reasoning: null,
+        reasoningDuration: null,
         toolCalls: null,
         toolCallId: null,
         createdAt: new Date().toISOString() as any, // Trpc decodes it properly, but types might expect string depending on trpc config

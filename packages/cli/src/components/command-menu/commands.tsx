@@ -8,7 +8,6 @@ export const COMMANDS: Command[] = [
     description: "Start a new conversation",
     value: "/new",
     action: (ctx) => {
-      ctx.toast.show({ message: "Starting a new Conversation" });
       ctx.navigate("/sessions/new");
     },
   },
@@ -19,7 +18,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Agent Selection",
-        children: <box padding={1}><text>Agent Selection Coming Soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Agent Selection Coming Soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -29,7 +32,11 @@ export const COMMANDS: Command[] = [
     value: "/models",
     action: (ctx) => {
       ctx.dialog.open({
-        children: <box padding={1}><text>Model Selection coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Model Selection coming soon...</text>
+          </box>
+        ),
         title: "Select Model",
       });
     },
@@ -92,7 +99,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Usage & Billing",
-        children: <box padding={1}><text>Usage Monitoring coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Usage Monitoring coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -109,7 +120,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Goal Command",
-        children: <box padding={1}><text>Goal configuration coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Goal configuration coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -120,7 +135,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Schedule Command",
-        children: <box padding={1}><text>Schedule configuration coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Schedule configuration coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -131,7 +150,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Plan Command",
-        children: <box padding={1}><text>Planning interface coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Planning interface coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -142,7 +165,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Grill Me",
-        children: <box padding={1}><text>Interactive interview coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Interactive interview coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -153,7 +180,11 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Teamwork Preview",
-        children: <box padding={1}><text>Teamwork preview coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Teamwork preview coming soon...</text>
+          </box>
+        ),
       });
     },
   },
@@ -164,9 +195,12 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Learn",
-        children: <box padding={1}><text>Learning preferences coming soon...</text></box>,
+        children: (
+          <box padding={1}>
+            <text>Learning preferences coming soon...</text>
+          </box>
+        ),
       });
     },
   },
 ];
-

@@ -35,7 +35,7 @@ const chatValidatorMiddleware = middleware(async ({ next, path }) => {
 const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
   const rawInput = await getRawInput();
   const parsed = z.object({ sessionId: z.string() }).safeParse(rawInput);
-  
+
   if (parsed.success) {
     const session = await db.session.findUnique({
       where: { id: parsed.data.sessionId },
@@ -57,8 +57,6 @@ export const chatRouter = router({
     .input(chatRequestSchema)
     .subscription(async function* ({ input, signal }) {
       const stream = streamAgent(input, signal);
-      for await (const event of stream) {
-        yield event;
-      }
+      for await (const event of stream) yield event;
     }),
 });

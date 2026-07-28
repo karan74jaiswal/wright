@@ -14,6 +14,8 @@ export async function* streamAgent(
 
   let startTime = Date.now();
   let fullText = "";
+  let fullReasoning = "";
+  let reasoningDurationMs: number | null = null;
 
   const persistInterruptedMessage = async () => {
     if (fullText.length === 0) return;
@@ -26,8 +28,10 @@ export async function* streamAgent(
           status: MessageStatus.INTERRUPTED,
           model,
           content: fullText,
+          reasoning: fullReasoning || null,
+          reasoningDuration: reasoningDurationMs,
           mode: mode as Mode,
-          duration: Math.round(elapsedMs / 1000),
+          duration: elapsedMs,
         },
       });
     } catch (e) {
@@ -91,6 +95,8 @@ export async function* streamAgent(
           yield { type: "text-delta", text } as ChatStreamEvent;
         } else if (block.type === "reasoning-delta") {
           const text = block.reasoning ?? "";
+          fullReasoning += text;
+          reasoningDurationMs = Date.now() - startTime;
           yield { type: "reasoning-delta", text } as ChatStreamEvent;
         } else if (
           block.type === "tool-call-delta" ||
@@ -148,11 +154,13 @@ export async function* streamAgent(
                   sessionId,
                   role: Role.ASSISTANT,
                   content: contentToSave || "",
+                  reasoning: fullReasoning || null,
+                  reasoningDuration: reasoningDurationMs,
                   toolCalls: toolCallsToSave,
                   model,
                   mode: mode as Mode,
                   status: MessageStatus.COMPLETED,
-                  duration: Math.round(elapsedMs / 1000),
+                  duration: elapsedMs,
                 },
               });
             }

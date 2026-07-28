@@ -49,10 +49,12 @@ model Message {
   status     MessageStatus
   model      String
   content    String
+  reasoning  String?
   toolCalls  Json?          // Stores LangChain tool_calls array
   toolCallId String?        // Used when role is TOOL
   mode       Mode
   duration   Int?
+  reasoningDuration Int?
   createdAt  DateTime      @default(now())
   session    Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

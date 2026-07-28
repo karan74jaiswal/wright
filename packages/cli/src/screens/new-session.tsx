@@ -35,7 +35,9 @@ const NewSession = () => {
   }, [state, navigate]);
 
   const trpc = useTRPC();
-  const createSessionMutation = useMutation(trpc.session.createSession.mutationOptions());
+  const createSessionMutation = useMutation(
+    trpc.session.createSession.mutationOptions(),
+  );
 
   useEffect(() => {
     if (!state || hasStartedRef.current) return;
@@ -54,10 +56,10 @@ const NewSession = () => {
       },
       {
         onSuccess: (session) => {
-          toast.show({
-            variant: ToastVariant.SUCCESS,
-            message: "New Session Created",
-          });
+          // toast.show({
+          //   variant: ToastVariant.SUCCESS,
+          //   message: "New Session Created",
+          // });
           // console.log(session);
           navigate(`/sessions/${session.id}`, {
             state: { session },
