@@ -50,13 +50,44 @@ const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
   return next();
 });
 
+// Global map to hold abort controllers for active streams
+const activeStreams = new Map<string, AbortController>();
+
 export const chatRouter = router({
   streamChat: publicProcedure
     .use(chatValidatorMiddleware)
     .use(sessionValidatorMiddleware)
     .input(chatRequestSchema)
     .subscription(async function* ({ input, signal }) {
-      const stream = streamAgent(input, signal);
-      for await (const event of stream) yield event;
+      const controller = new AbortController();
+      activeStreams.set(input.sessionId, controller);
+
+      if (signal) {
+        signal.addEventListener("abort", () => {
+          controller.abort();
+          activeStreams.delete(input.sessionId);
+        });
+      }
+
+      try {
+        const stream = streamAgent(input, controller.signal);
+        for await (const event of stream) {
+          yield event;
+        }
+      } finally {
+        activeStreams.delete(input.sessionId);
+      }
+    }),
+
+  cancelChat: publicProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(({ input }) => {
+      const controller = activeStreams.get(input.sessionId);
+      if (controller) {
+        controller.abort();
+        activeStreams.delete(input.sessionId);
+        return { success: true };
+      }
+      return { success: false };
     }),
 });

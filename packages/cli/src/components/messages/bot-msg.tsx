@@ -12,6 +12,7 @@ export interface BotMsgProps {
   toolCalls?: Record<string, { name: string; args: string; result?: any }>;
   streaming?: boolean;
   mode?: Mode;
+  status?: string;
   duration?: number | null;
   reasoningDuration?: number | null;
   showReasoning?: boolean;
@@ -21,6 +22,7 @@ export const BotMsg = ({
   content,
   model,
   mode,
+  status,
   reasoning,
   toolCalls,
   duration,
@@ -48,7 +50,13 @@ export const BotMsg = ({
                   ? "Thinking..."
                   : `Thought${reasoningDuration ? ` for ${prettyMilliseconds(reasoningDuration)}` : ""}`}
               </text>
+
               {streaming ? <ThinkingSpinner /> : null}
+              <text attributes={TextAttributes.DIM}>
+                {showReasoning
+                  ? "(ctrl + o to collapse)"
+                  : "(ctrl + o to expand)"}
+              </text>
             </box>
             {showReasoning && (
               <text fg={colors.dimSeparator} attributes={TextAttributes.ITALIC}>
@@ -128,6 +136,14 @@ export const BotMsg = ({
                 <text attributes={TextAttributes.DIM}>
                   {prettyMilliseconds(duration)}
                 </text>
+              </>
+            )}
+            {status === "INTERRUPTED" && (
+              <>
+                <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+                  &gt;
+                </text>
+                <text attributes={TextAttributes.DIM}>interrupted</text>
               </>
             )}
           </box>

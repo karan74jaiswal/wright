@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSubscription } from "@trpc/tanstack-react-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useTRPC } from "../lib/api-client";
 import { useToast } from "../providers/toast";
@@ -58,6 +58,10 @@ export function useChat({
   } | null>(null);
 
   const hasAutoResumedRef = useRef(false);
+
+  const cancelChatMutation = useMutation(
+    trpc.chat.cancelChat.mutationOptions(),
+  );
 
   // Sync incoming database history (e.g. from invalidations)
   useEffect(() => {
@@ -216,21 +220,61 @@ export function useChat({
   );
 
   const stop = useCallback(() => {
-    // Setting activeRequest to null immediately unsubscribes tRPC
+    // 1. Explicitly notify the backend to abort the LangGraph run
+    cancelChatMutation.mutate({ sessionId });
+
+    // 2. Setting activeRequest to null immediately unsubscribes tRPC
     setActiveRequest(null);
+
+    // Optimistically push the partial text to history to prevent UI flicker
+    // before the backend has time to save it to PostgreSQL.
+    if (
+      streamedContent.trim().length > 0 ||
+      streamedReasoning.trim().length > 0
+    ) {
+      const optimisticMsg: Message = {
+        id: `temp-interrupt-${Date.now()}`,
+        sessionId,
+        role: "ASSISTANT",
+        content: streamedContent,
+        model: DEFAULT_CHAT_MODEL_ID,
+        mode: "BUILD",
+        status: "INTERRUPTED",
+        duration: null,
+        reasoning: streamedReasoning || null,
+        reasoningDuration: null,
+        toolCalls:
+          Object.keys(activeToolCalls).length > 0
+            ? (activeToolCalls as any)
+            : null,
+        toolCallId: null,
+        createdAt: new Date().toISOString() as any,
+      };
+      setHistory((prev) => [...prev, optimisticMsg]);
+    }
+
+    // 3. Clear streaming state synchronously so we don't render 2 BotMsgs while refetching
+    setStreamedContent("");
+    setStreamedReasoning("");
+    setActiveToolCalls({});
+    setInterruptPayload(null);
+    setStatus("idle");
+
+    // 4. Refetch history from DB
     queryClient
       .invalidateQueries(
         trpc.session.getSession.queryOptions({ id: sessionId }),
       )
-      .catch((e) => console.error("Failed to invalidate queries:", e))
-      .finally(() => {
-        setStreamedContent("");
-        setStreamedReasoning("");
-        setActiveToolCalls({});
-        setInterruptPayload(null);
-        setStatus("idle");
-      });
-  }, [sessionId, queryClient, trpc]);
+      .catch((e) => console.error("Failed to invalidate queries:", e));
+  }, [
+    sessionId,
+    queryClient,
+    trpc,
+    streamedContent,
+    streamedReasoning,
+    activeToolCalls,
+    cancelChatMutation,
+  ]);
 
   const isLoading = status === "streaming" || status === "interrupted";
 

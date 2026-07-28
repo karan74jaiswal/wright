@@ -67,6 +67,7 @@ const ChatMessage = memo(function ChatMessage({ msg, showReasoning }: ChatMessag
       reasoningDuration={msg.reasoningDuration || undefined}
       toolCalls={parsedToolCalls}
       mode={msg.mode}
+      status={msg.status}
       duration={msg.duration}
       showReasoning={showReasoning}
     />
@@ -173,6 +174,7 @@ const SessionInner = ({ id }: { id: string }) => {
               toolCalls={activeToolCalls}
               streaming={status === "streaming"}
               mode={history.at(-1)?.mode}
+              status={status === "interrupted" ? "INTERRUPTED" : undefined}
               showReasoning={showReasoning}
             />
           </box>

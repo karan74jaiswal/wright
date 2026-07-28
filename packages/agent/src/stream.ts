@@ -76,6 +76,7 @@ export async function* streamAgent(
     const eventStream = (await graph.streamEvents(runInput, {
       version: "v3",
       ...config,
+
       signal,
     })) as unknown as AsyncGenerator<any, void, unknown>;
 
