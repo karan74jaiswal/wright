@@ -64,7 +64,7 @@ const KeyBoardProvider = function ({ children }: PropsWithChildren): ReactNode {
       renderer.console.toggle();
       // console.log(stack);
     }
-    if (key.ctrl && key.name === "c") {
+    if (key.ctrl && key.name === "c" && !key.shift) {
       const currentStack = stackRef.current;
       for (let i = currentStack.length - 1; i >= 0; i--) {
         const layerId = currentStack[i]!;

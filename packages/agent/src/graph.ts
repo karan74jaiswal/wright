@@ -27,10 +27,26 @@ const getSystemPrompt = (mode: Mode) => {
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   const modelId = config?.configurable?.modelId as SupportedChatModelId;
   const mode = (config?.configurable?.mode as Mode) || "BUILD";
+  const reasoningEffort = config?.configurable?.reasoningEffort as string | undefined;
+  const providerApiKeys = config?.configurable?.providerApiKeys as Record<string, string | undefined> | undefined;
 
   if (!modelId) throw new Error("Model ID not provided in configurable config");
 
-  const model = getLangChainModel(modelId);
+  let apiKey: string | undefined = undefined;
+  if (providerApiKeys) {
+    if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) {
+      apiKey = providerApiKeys.openai;
+    } else if (modelId.startsWith("claude")) {
+      apiKey = providerApiKeys.anthropic;
+    } else if (modelId.startsWith("gemini")) {
+      apiKey = providerApiKeys.google;
+    }
+  }
+
+  const model = getLangChainModel(modelId, {
+    apiKey,
+    reasoningEffort
+  });
   const tools = mode === "PLAN" ? planTools : buildTools;
   
   if (!model.bindTools) {

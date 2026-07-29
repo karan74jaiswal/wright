@@ -60,16 +60,24 @@ function getInitialTheme(): Theme {
 
 function persistTheme(themeName: string) {
   try {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+
+    let existing = {};
+    try {
+      existing = JSON.parse(readFileSync(PREFERENCES_PATH, { encoding: "utf-8" }));
+    } catch (e) {}
 
     writeFileSync(
       PREFERENCES_PATH,
-      JSON.stringify({ themeName } satisfies ThemePreferences, null, 2),
+      JSON.stringify({ ...existing, themeName }, null, 2),
       {
         encoding: "utf8",
+        mode: 0o600,
       },
     );
-  } catch (err) {}
+  } catch (err) {
+    console.error("Failed to persist theme configuration:", err);
+  }
 }
 
 export default function ThemeProvider({

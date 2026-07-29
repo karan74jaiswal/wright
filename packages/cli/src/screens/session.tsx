@@ -70,6 +70,7 @@ const ChatMessage = memo(function ChatMessage({ msg, showReasoning }: ChatMessag
       status={msg.status}
       duration={msg.duration}
       showReasoning={showReasoning}
+      reasoningEffort={msg.reasoningEffort}
     />
   );
 });
@@ -169,13 +170,14 @@ const SessionInner = ({ id }: { id: string }) => {
           >
             <BotMsg
               content={streamedContent}
-              model={DEFAULT_CHAT_MODEL_ID}
+              model={history.at(-1)?.model || DEFAULT_CHAT_MODEL_ID}
               reasoning={streamedReasoning}
               toolCalls={activeToolCalls}
               streaming={status === "streaming"}
               mode={history.at(-1)?.mode}
               status={status === "interrupted" ? "INTERRUPTED" : undefined}
               showReasoning={showReasoning}
+              reasoningEffort={history.at(-1)?.reasoningEffort}
             />
           </box>
         ) : null,

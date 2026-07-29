@@ -4,6 +4,7 @@ import { MarkdownViewer } from "../markdown-viewer";
 import { Mode } from "@wright/database/enums";
 import prettyMilliseconds from "pretty-ms";
 import ThinkingSpinner from "../thinking-spinner";
+import { usePromptConfig } from "../../providers/prompt-config";
 
 export interface BotMsgProps {
   content: string;
@@ -16,6 +17,7 @@ export interface BotMsgProps {
   duration?: number | null;
   reasoningDuration?: number | null;
   showReasoning?: boolean;
+  reasoningEffort?: string | null;
 }
 
 export const BotMsg = ({
@@ -29,8 +31,23 @@ export const BotMsg = ({
   streaming = false,
   reasoningDuration,
   showReasoning = false,
+  reasoningEffort,
 }: BotMsgProps) => {
   const { colors } = useTheme();
+  const { currentModel, reasoningEffort: globalEffort } = usePromptConfig();
+
+  const isReasoningModel = 
+    model.startsWith("o1") || 
+    model.startsWith("o3") || 
+    model.startsWith("o4") || 
+    model.startsWith("gpt-5") ||
+    model.startsWith("gemini-3") || 
+    model.startsWith("gemini-2.5") || 
+    model.startsWith("gemini-2.0-flash-thinking");
+
+  // Determine what effort string to display (persisted message effort > global current effort > nothing)
+  const displayEffort = reasoningEffort || (streaming ? globalEffort : null);
+  const formattedEffort = displayEffort ? displayEffort.charAt(0).toUpperCase() + displayEffort.slice(1) : "";
 
   return (
     <box width="100%" alignItems="flex-start" flexDirection="column">
@@ -127,7 +144,10 @@ export const BotMsg = ({
             <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
               &gt;
             </text>
-            <text attributes={TextAttributes.DIM}>{model}</text>
+            <text attributes={TextAttributes.DIM}>
+              {model}
+              {isReasoningModel && formattedEffort ? ` (${formattedEffort})` : ""}
+            </text>
             {duration && (
               <>
                 <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>

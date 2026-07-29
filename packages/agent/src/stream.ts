@@ -10,7 +10,7 @@ export async function* streamAgent(
   input: ChatRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const { sessionId, message, resume, model, mode, isAutoResume } = input;
+  const { sessionId, message, resume, model, mode, isAutoResume, reasoningEffort, providerApiKeys } = input;
 
   let startTime = Date.now();
   let fullText = "";
@@ -29,6 +29,7 @@ export async function* streamAgent(
           model,
           content: fullText,
           reasoning: fullReasoning || null,
+          reasoningEffort: reasoningEffort || null,
           reasoningDuration: reasoningDurationMs,
           mode: mode as Mode,
           duration: elapsedMs,
@@ -59,7 +60,7 @@ export async function* streamAgent(
     const graph = createAgentGraph();
 
     const config = {
-      configurable: { thread_id: sessionId, modelId: model, mode },
+      configurable: { thread_id: sessionId, modelId: model, mode, reasoningEffort, providerApiKeys },
     };
 
     const currentState = await graph.getState(config);
@@ -156,6 +157,7 @@ export async function* streamAgent(
                   role: Role.ASSISTANT,
                   content: contentToSave || "",
                   reasoning: fullReasoning || null,
+                  reasoningEffort: reasoningEffort || null,
                   reasoningDuration: reasoningDurationMs,
                   toolCalls: toolCallsToSave,
                   model,

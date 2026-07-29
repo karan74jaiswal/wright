@@ -3,10 +3,23 @@ import Header from "../components/header";
 import { InputBar } from "../components/input-bar";
 import { useTheme } from "../providers/theme";
 import { useNavigate } from "react-router";
+import { usePromptConfig } from "../providers/prompt-config";
+import { useKeyboardLayer } from "../providers/keyboard";
+import { useKeyboard } from "@opentui/react";
+import { TextAttributes } from "@opentui/core";
 
 export default function Home() {
   const { colors } = useTheme();
   const navigate = useNavigate();
+  const { currentMode, setMode } = usePromptConfig();
+  const { isTopLayer } = useKeyboardLayer();
+
+  useKeyboard((key) => {
+    if (!isTopLayer("base")) return;
+    if (key.name === "tab") {
+      setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
+    }
+  });
 
   const handleSubmit = useCallback(
     (text: string) => {
@@ -32,8 +45,12 @@ export default function Home() {
       gap={2}
     >
       <Header />
-      <box width="100%" maxWidth={78} paddingX={2}>
+      <box width="100%" maxWidth={78} paddingX={2} flexDirection="column" gap={1}>
         <InputBar onSubmit={handleSubmit} />
+        <box flexDirection="row" gap={1} marginLeft="auto">
+          <text>tab</text>
+          <text attributes={TextAttributes.DIM}>agents</text>
+        </box>
       </box>
     </box>
   );

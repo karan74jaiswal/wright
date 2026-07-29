@@ -56,11 +56,107 @@ export const SUPPORTED_CHAT_MODELS = [
     },
   },
   {
+    id: "gpt-5.6",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 5.0,
+      outputUsdPerMillionTokens: 20.0,
+    },
+  },
+  {
+    id: "gpt-5.5",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 2.5,
+      outputUsdPerMillionTokens: 10.0,
+    },
+  },
+  {
+    id: "gpt-5.4",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 1.0,
+      outputUsdPerMillionTokens: 5.0,
+    },
+  },
+  {
     id: "gpt-5.4-mini",
     provider: "openai",
     pricing: {
       inputUsdPerMillionTokens: 0.75,
       outputUsdPerMillionTokens: 4.5,
+    },
+  },
+  {
+    id: "gpt-4o",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 2.5,
+      outputUsdPerMillionTokens: 10.0,
+    },
+  },
+  {
+    id: "gpt-4.5",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 2.5,
+      outputUsdPerMillionTokens: 10.0,
+    },
+  },
+  {
+    id: "o4-mini",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 1.0,
+      outputUsdPerMillionTokens: 5.0,
+    },
+  },
+  {
+    id: "o3-pro",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 15.0,
+      outputUsdPerMillionTokens: 60.0,
+    },
+  },
+  {
+    id: "o3",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 5.0,
+      outputUsdPerMillionTokens: 15.0,
+    },
+  },
+  {
+    id: "o3-mini",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 1.1,
+      outputUsdPerMillionTokens: 4.4,
+    },
+  },
+  {
+    id: "o1-pro",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 15.0,
+      outputUsdPerMillionTokens: 60.0,
+    },
+  },
+  {
+    id: "o1",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 15.0,
+      outputUsdPerMillionTokens: 60.0,
+    },
+  },
+  {
+    id: "o1-mini",
+    provider: "openai",
+    pricing: {
+      inputUsdPerMillionTokens: 3.0,
+      outputUsdPerMillionTokens: 12.0,
     },
   },
 

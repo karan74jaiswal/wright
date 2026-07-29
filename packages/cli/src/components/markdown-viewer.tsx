@@ -23,6 +23,7 @@ export const MarkdownViewer = ({ content, streaming }: MarkdownViewerProps) => {
     return SyntaxStyle.fromStyles({
       // Base tokens
       string: { fg: RGBA.fromHex(colors.success) },
+
       keyword: { fg: RGBA.fromHex(colors.planMode) },
       function: { fg: RGBA.fromHex(colors.selection) },
       comment: { fg: RGBA.fromHex(colors.dimSeparator), italic: true },
@@ -105,9 +106,10 @@ export const MarkdownViewer = ({ content, streaming }: MarkdownViewerProps) => {
   }, [colors, syntaxStyle, renderer]);
 
   let displayContent = content;
-
+  // console.log(content);
   try {
     const parsed = JSON.parse(content);
+    // console.log(parsed);
     if (Array.isArray(parsed)) {
       displayContent = parsed.map((block: any) => block.text || "").join("");
     } else if (
@@ -140,6 +142,7 @@ export const MarkdownViewer = ({ content, streaming }: MarkdownViewerProps) => {
       syntaxStyle={syntaxStyle}
       content={displayContent}
       streaming={streaming}
+      conceal={true}
       renderNode={customRenderNode}
       tableOptions={{
         style: "grid",
