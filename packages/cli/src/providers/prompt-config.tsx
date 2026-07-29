@@ -70,7 +70,7 @@ function getInitialConfig(): PromptPreferences {
 
 function persistConfig(config: PromptPreferences) {
   try {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
     
     // Read existing to merge, just in case
     let existing = {};
@@ -83,15 +83,18 @@ function persistConfig(config: PromptPreferences) {
       JSON.stringify({ ...existing, ...config }, null, 2),
       {
         encoding: "utf8",
+        mode: 0o600,
       },
     );
-  } catch (err) {}
+  } catch (err) {
+    console.error("Failed to persist prompt configuration:", err);
+  }
 }
 
 export default function PromptConfigProvider({
   children,
 }: PropsWithChildren): ReactNode {
-  const initialConfig = getInitialConfig();
+  const [initialConfig] = useState(() => getInitialConfig());
   const [currentMode, setCurrentMode] = useState<Mode>(initialConfig.mode as Mode);
   const [currentModel, setCurrentModel] = useState<SupportedChatModelId>(initialConfig.model as SupportedChatModelId);
   const [reasoningEffort, setCurrentReasoningEffort] = useState<ReasoningEffort>((initialConfig.reasoningEffort as ReasoningEffort) || "high");

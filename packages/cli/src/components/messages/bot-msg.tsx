@@ -17,6 +17,7 @@ export interface BotMsgProps {
   duration?: number | null;
   reasoningDuration?: number | null;
   showReasoning?: boolean;
+  reasoningEffort?: string | null;
 }
 
 export const BotMsg = ({
@@ -30,9 +31,10 @@ export const BotMsg = ({
   streaming = false,
   reasoningDuration,
   showReasoning = false,
+  reasoningEffort,
 }: BotMsgProps) => {
   const { colors } = useTheme();
-  const { currentModel, reasoningEffort } = usePromptConfig();
+  const { currentModel, reasoningEffort: globalEffort } = usePromptConfig();
 
   const isReasoningModel = 
     model.startsWith("o1") || 
@@ -43,7 +45,9 @@ export const BotMsg = ({
     model.startsWith("gemini-2.5") || 
     model.startsWith("gemini-2.0-flash-thinking");
 
-  const formattedEffort = reasoningEffort.charAt(0).toUpperCase() + reasoningEffort.slice(1);
+  // Determine what effort string to display (persisted message effort > global current effort > nothing)
+  const displayEffort = reasoningEffort || (streaming ? globalEffort : null);
+  const formattedEffort = displayEffort ? displayEffort.charAt(0).toUpperCase() + displayEffort.slice(1) : "";
 
   return (
     <box width="100%" alignItems="flex-start" flexDirection="column">
@@ -142,7 +146,7 @@ export const BotMsg = ({
             </text>
             <text attributes={TextAttributes.DIM}>
               {model}
-              {model === currentModel && isReasoningModel ? ` (${formattedEffort})` : ""}
+              {isReasoningModel && formattedEffort ? ` (${formattedEffort})` : ""}
             </text>
             {duration && (
               <>

@@ -50,6 +50,7 @@ model Message {
   model      String
   content    String
   reasoning  String?
+  reasoningEffort String?
   toolCalls  Json?          // Stores LangChain tool_calls array
   toolCallId String?        // Used when role is TOOL
   mode       Mode

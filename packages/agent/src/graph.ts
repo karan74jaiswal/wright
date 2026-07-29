@@ -34,7 +34,7 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
 
   let apiKey: string | undefined = undefined;
   if (providerApiKeys) {
-    if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3")) {
+    if (modelId.startsWith("gpt") || modelId.startsWith("o1") || modelId.startsWith("o3") || modelId.startsWith("o4")) {
       apiKey = providerApiKeys.openai;
     } else if (modelId.startsWith("claude")) {
       apiKey = providerApiKeys.anthropic;

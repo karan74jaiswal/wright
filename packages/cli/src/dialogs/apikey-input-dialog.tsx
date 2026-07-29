@@ -21,14 +21,19 @@ export default function ApiKeyInputDialog({ providerId, onSuccess }: ApiKeyInput
 
   const handleSave = useCallback(() => {
     const newValue = inputRef.current?.value?.trim();
+    const isConfigured = !!providerApiKeys[providerId as keyof typeof providerApiKeys];
+
     if (newValue) {
       setApiKeys({
         ...providerApiKeys,
         [providerId]: newValue,
       });
+      close();
+      onSuccess();
+    } else if (isConfigured) {
+      close();
+      onSuccess();
     }
-    close();
-    onSuccess();
   }, [setApiKeys, close, providerApiKeys, providerId, onSuccess]);
 
   useKeyboard((key) => {

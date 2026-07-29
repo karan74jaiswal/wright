@@ -106,10 +106,10 @@ export const MarkdownViewer = ({ content, streaming }: MarkdownViewerProps) => {
   }, [colors, syntaxStyle, renderer]);
 
   let displayContent = content;
-  console.log(content);
+  // console.log(content);
   try {
     const parsed = JSON.parse(content);
-    console.log(parsed);
+    // console.log(parsed);
     if (Array.isArray(parsed)) {
       displayContent = parsed.map((block: any) => block.text || "").join("");
     } else if (

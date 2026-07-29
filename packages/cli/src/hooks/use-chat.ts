@@ -199,6 +199,7 @@ export function useChat({
         duration: null,
         reasoning: null,
         reasoningDuration: null,
+        reasoningEffort: null,
         toolCalls: null,
         toolCallId: null,
         createdAt: new Date().toISOString() as any, // Trpc decodes it properly, but types might expect string depending on trpc config
@@ -247,6 +248,7 @@ export function useChat({
         duration: null,
         reasoning: streamedReasoning || null,
         reasoningDuration: null,
+        reasoningEffort: reasoningEffort || null,
         toolCalls:
           Object.keys(activeToolCalls).length > 0
             ? (activeToolCalls as any)
