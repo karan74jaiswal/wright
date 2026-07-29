@@ -35,8 +35,6 @@
     "packages/api-gateway": {
       "name": "@wright/api-gateway",
       "dependencies": {
-        "@wright/chat-service": "workspace:*",
-        "@wright/session-service": "workspace:*",
         "@wright/shared": "workspace:*",
         "cors": "^2.8.6",
         "dotenv": "^17.4.2",
@@ -47,6 +45,8 @@
         "@types/bun": "latest",
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.6",
+        "@wright/chat-service": "workspace:*",
+        "@wright/session-service": "workspace:*",
       },
     },
     "packages/chat-service": {

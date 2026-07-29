@@ -12,13 +12,13 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "http-proxy-middleware": "^4.2.0",
-    "@wright/shared": "workspace:*",
-    "@wright/session-service": "workspace:*",
-    "@wright/chat-service": "workspace:*"
+    "@wright/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@wright/session-service": "workspace:*",
+    "@wright/chat-service": "workspace:*"
   }
 }
