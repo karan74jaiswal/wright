@@ -8,7 +8,7 @@ export const COMMANDS: Command[] = [
     description: "Start a new conversation",
     value: "/new",
     action: (ctx) => {
-      ctx.navigate("/sessions/new");
+      ctx.navigate("/");
     },
   },
   {

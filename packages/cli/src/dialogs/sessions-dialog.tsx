@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { format } from "date-fns";
 import { useDialog } from "../providers/dialog";
 import DialogSearchList from "../components/dialog/dialog-search-list";
 import { useTRPC } from "../lib/api-client";
@@ -46,10 +47,15 @@ export default function SessionsDialog() {
         session.id.toLowerCase().includes(query)
       }
       renderItem={(session, isSelected) => (
-        <text selectable={false} fg={isSelected ? "black" : "white"}>
-          {isSelected ? "\u0020\u2022\u0020" : "\u0020\u0020\u0020"}
-          {session.title}
-        </text>
+        <box flexDirection="row" width="100%" justifyContent="space-between" paddingRight={1}>
+          <text selectable={false} fg={isSelected ? "black" : "white"}>
+            {isSelected ? "\u0020\u2022\u0020" : "\u0020\u0020\u0020"}
+            {session.title}
+          </text>
+          <text selectable={false} fg={isSelected ? "black" : "gray"}>
+            {format(new Date(session.createdAt), "hh:mm a")}
+          </text>
+        </box>
       )}
     />
   );

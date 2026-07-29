@@ -45,10 +45,10 @@ const NewSession = () => {
 
     createSessionMutation.mutate(
       {
-        title: "New Message",
+        title: state.message.slice(0, 100),
         cwd: process.cwd(),
         initialMessage: {
-          content: state.message.slice(0, 100),
+          content: state.message,
           model: DEFAULT_CHAT_MODEL_ID,
           mode: "BUILD",
           role: "USER",

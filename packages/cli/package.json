@@ -29,6 +29,7 @@
     "@types/eventsource": "^3.0.0",
     "@wright/shared": "workspace:*",
     "chalk": "^5.4.1",
+    "date-fns": "^4.4.0",
     "eventsource": "^4.1.0",
     "opentui-spinner": "^0.0.7",
     "pretty-ms": "^9.3.0",
