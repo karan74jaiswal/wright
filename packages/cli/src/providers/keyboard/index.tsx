@@ -4,6 +4,7 @@ import {
   useCallback,
   createContext,
   useContext,
+  useMemo,
   type PropsWithChildren,
   type ReactNode,
 } from "react";
@@ -76,12 +77,15 @@ const KeyBoardProvider = function ({ children }: PropsWithChildren): ReactNode {
     }
   });
 
-  const keyboardContextvalue: KeyboardLayerContextValue = {
-    push,
-    pop,
-    isTopLayer,
-    setResponder,
-  };
+  const keyboardContextvalue = useMemo(
+    (): KeyboardLayerContextValue => ({
+      push,
+      pop,
+      isTopLayer,
+      setResponder,
+    }),
+    [push, pop, isTopLayer, setResponder],
+  );
   return (
     <KeyboardContext.Provider value={keyboardContextvalue}>
       {children}

@@ -32,9 +32,9 @@ const createSessionSchema = z.object({
   cwd: z.string().optional(),
   initialMessage: z
     .object({
-      role: z.enum(Role), // Cast to any in case TS complains, though it worked in Hono
+      role: z.nativeEnum(Role), // Cast to any in case TS complains, though it worked in Hono
       content: z.string(),
-      mode: z.enum(Mode),
+      mode: z.nativeEnum(Mode),
       model: z
         .string()
         .refine((id) => !!findChatSupportedModel(id), "Unsupported Model"),
@@ -47,11 +47,6 @@ export const sessionRouter = router({
     const sessions = await db.session.findMany({
       orderBy: { createdAt: "desc" },
       select: { id: true, title: true, createdAt: true },
-    });
-
-    Sentry.captureMessage("Listed Sessions", {
-      level: "info",
-      extra: { count: sessions.length },
     });
 
     return sessions;
@@ -78,15 +73,6 @@ export const sessionRouter = router({
           message: "Session not found",
         });
       }
-
-      Sentry.captureMessage("Loaded Session", {
-        level: "info",
-        extra: {
-          sessionId: id,
-          userId: "mock-user",
-          messageCount: session.messages.length,
-        },
-      });
 
       return {
         ...session,
@@ -120,16 +106,6 @@ export const sessionRouter = router({
           include: { messages: true },
         });
 
-        Sentry.captureMessage("Created Session", {
-          level: "info",
-          extra: {
-            sessionId: session.id,
-            userId: "mock-user",
-            title: session.title,
-            hasInitialMessage: session.messages.length > 0,
-            cwd: session.cwd,
-          },
-        });
         // return session;
 
         return {

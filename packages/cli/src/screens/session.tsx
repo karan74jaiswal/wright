@@ -122,6 +122,11 @@ const SessionInner = ({ id }: { id: string }) => {
   }, [isError, error, navigate, toast]);
 
   // Handle stream state via our robust useChat hook!
+  const initialMessages = useMemo(
+    () => session?.messages ?? [],
+    [session?.messages],
+  );
+
   const {
     history,
     streamedContent,
@@ -135,7 +140,7 @@ const SessionInner = ({ id }: { id: string }) => {
     stop,
   } = useChat({
     sessionId: id!,
-    initialMessages: session?.messages || [],
+    initialMessages,
   });
 
   if (!session)

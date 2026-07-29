@@ -10,6 +10,7 @@ import { httpBatchLink, httpSubscriptionLink, splitLink, createTRPCClient } from
 import { TRPCProvider } from "./lib/api-client";
 import type { AppRouter } from "@wright/api-gateway";
 import { EventSource } from "eventsource";
+import superjson from "superjson";
 
 const url = process.env.API_URL ?? "http://localhost:3000/api";
 
@@ -39,8 +40,8 @@ const trpcClient = createTRPCClient<AppRouter>({
   links: [
     splitLink({
       condition: (op) => op.type === "subscription",
-      true: httpSubscriptionLink({ url, EventSource: EventSource as any }),
-      false: httpBatchLink({ url }),
+      true: httpSubscriptionLink({ url, EventSource: EventSource as any, transformer: superjson }),
+      false: httpBatchLink({ url, transformer: superjson }),
     }),
   ],
 });

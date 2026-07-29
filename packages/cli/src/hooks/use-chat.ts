@@ -108,10 +108,8 @@ export function useChat({
         enabled: !!activeRequest && !!sessionId,
         onData(event) {
           if (event.type === "text-delta") {
-            console.log(event);
             setStreamedContent((prev) => prev + event.text);
           } else if (event.type === "reasoning-delta") {
-            console.log(event);
             setStreamedReasoning((prev) => prev + event.text);
           } else if (event.type === "tool-call") {
             setActiveToolCalls((prev) => ({

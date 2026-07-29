@@ -150,22 +150,26 @@ export async function* streamAgent(
                 toolCallsToSave = (lastMsg as any).tool_calls;
               }
 
-              await db.message.create({
-                data: {
-                  id: msgId,
-                  sessionId,
-                  role: Role.ASSISTANT,
-                  content: contentToSave || "",
-                  reasoning: fullReasoning || null,
-                  reasoningEffort: reasoningEffort || null,
-                  reasoningDuration: reasoningDurationMs,
-                  toolCalls: toolCallsToSave,
-                  model,
-                  mode: mode as Mode,
-                  status: MessageStatus.COMPLETED,
-                  duration: elapsedMs,
-                },
-              });
+              try {
+                await db.message.create({
+                  data: {
+                    id: msgId,
+                    sessionId,
+                    role: Role.ASSISTANT,
+                    content: contentToSave || "",
+                    reasoning: fullReasoning || null,
+                    reasoningEffort: reasoningEffort || null,
+                    reasoningDuration: reasoningDurationMs,
+                    toolCalls: toolCallsToSave,
+                    model,
+                    mode: mode as Mode,
+                    status: MessageStatus.COMPLETED,
+                    duration: elapsedMs,
+                  },
+                });
+              } catch (dbErr) {
+                console.error("Failed to persist AI message:", dbErr);
+              }
             }
 
             if (msgType === "tool") {
@@ -175,18 +179,22 @@ export async function* streamAgent(
                   : JSON.stringify(lastMsg.content);
               const toolCallId = lastMsg.tool_call_id || "unknown";
 
-              await db.message.create({
-                data: {
-                  id: msgId,
-                  sessionId,
-                  role: Role.TOOL,
-                  content: contentToSave,
-                  toolCallId,
-                  model,
-                  mode: mode as Mode,
-                  status: MessageStatus.COMPLETED,
-                },
-              });
+              try {
+                await db.message.create({
+                  data: {
+                    id: msgId,
+                    sessionId,
+                    role: Role.TOOL,
+                    content: contentToSave,
+                    toolCallId,
+                    model,
+                    mode: mode as Mode,
+                    status: MessageStatus.COMPLETED,
+                  },
+                });
+              } catch (dbErr) {
+                console.error("Failed to persist tool message:", dbErr);
+              }
 
               yield {
                 type: "tool-result",

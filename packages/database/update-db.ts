@@ -1,11 +1,5 @@
-import { prisma } from './client';
-
-async function main() {
-  try {
-    await prisma.$executeRawUnsafe('ALTER TABLE "Message" ADD COLUMN "reasoning" TEXT;');
-    console.log("Column reasoning added successfully.");
-  } catch(e) {
-    console.error("Error or column already exists:", e);
-  }
-}
-main();
+// This file has been intentionally removed.
+// Raw SQL migrations via $executeRawUnsafe bypass Prisma's migration tracking,
+// causing schema drift. Use `bunx prisma migrate dev` to create proper migrations.
+//
+// See: https://www.prisma.io/docs/orm/prisma-migrate

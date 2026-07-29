@@ -48,9 +48,12 @@ export default tseslint.config(
     // Backend Packages (e.g., packages/server, packages/shared)
     // ----------------------------------------------------
     files: [
-      "packages/server/**/*.ts",
+      "packages/api-gateway/**/*.ts",
+      "packages/chat-service/**/*.ts",
+      "packages/session-service/**/*.ts",
       "packages/shared/**/*.ts",
-      "packages/db/**/*.ts",
+      "packages/database/**/*.ts",
+      "packages/agent/**/*.ts",
     ],
     languageOptions: {
       globals: {

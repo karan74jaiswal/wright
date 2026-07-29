@@ -25,7 +25,8 @@ const NewSession = () => {
     return parsed.data;
   }, [location.state]);
 
-  const { currentMode, currentModel, reasoningEffort, providerApiKeys } = usePromptConfig();
+  const { currentMode, currentModel, reasoningEffort, providerApiKeys } =
+    usePromptConfig();
 
   //   const [msgs, setMsgs] = useState([]);
   //   const [loading, setLoading] = useState(false);
@@ -80,7 +81,16 @@ const NewSession = () => {
         },
       },
     );
-  }, [navigate, state, toast, createSessionMutation, currentModel, currentMode, reasoningEffort, providerApiKeys]);
+  }, [
+    navigate,
+    state,
+    toast,
+    createSessionMutation,
+    currentModel,
+    currentMode,
+    reasoningEffort,
+    providerApiKeys,
+  ]);
 
   if (!state?.message) return null;
 

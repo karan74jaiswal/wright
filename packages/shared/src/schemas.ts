@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { SUPPORTED_CHAT_MODELS } from "./models";
 
-export const toolCallArgsSchema = z.record(z.string(), z.any());
+export const toolCallArgsSchema = z.record(z.string(), z.unknown());
 
 export const toolCallSchema = z.object({
   id: z.string(),
@@ -40,11 +40,11 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("tool-result"),
     toolCallId: z.string(),
-    result: z.any(),
+    result: z.unknown(),
   }),
   z.object({
     type: z.literal("interrupt"),
-    payload: z.any(),
+    payload: z.unknown(),
   }),
   z.object({
     type: z.literal("done"),
@@ -61,9 +61,9 @@ export type ChatStreamEvent = z.infer<typeof chatStreamEventSchema>;
 const supportedModelIds = SUPPORTED_CHAT_MODELS.map(m => m.id) as [string, ...string[]];
 
 export const chatRequestSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
+  sessionId: z.string().min(1, "Session ID is required").max(255),
   message: z.string().optional(),
-  resume: z.any().optional(),
+  resume: z.unknown().optional(),
   model: z.string().refine((val) => supportedModelIds.includes(val), {
     message: "Invalid or unsupported Model ID",
   }),

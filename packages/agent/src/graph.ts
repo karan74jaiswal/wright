@@ -55,12 +55,20 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   
   const modelWithTools = model.bindTools(tools);
 
-  // Inject system prompt if it's not already at the front
+  // Always ensure the system prompt matches the current mode.
+  // If the first message is a system message, replace it (mode may have changed).
+  // Otherwise, prepend the system prompt.
   let messages = state.messages;
-  if (messages.length > 0 && messages[0]?._getType() !== "system" && messages[0]?.type !== "system") {
-      messages = [getSystemPrompt(mode), ...messages];
-  } else if (messages.length === 0) {
-      messages = [getSystemPrompt(mode)];
+  const systemPrompt = getSystemPrompt(mode);
+  if (messages.length === 0) {
+    messages = [systemPrompt];
+  } else if (
+    messages[0]?._getType() === "system" ||
+    messages[0]?.type === "system"
+  ) {
+    messages = [systemPrompt, ...messages.slice(1)];
+  } else {
+    messages = [systemPrompt, ...messages];
   }
   
   const response = await modelWithTools.invoke(messages, config);

@@ -1,3 +1,4 @@
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Outlet } from "react-router";
 import KeyBoardProvider from "../providers/keyboard";
 import DialogProvider from "../providers/dialog";
@@ -5,6 +6,44 @@ import ToastProvider from "../providers/toast";
 import ThemedRoot from "./themed-root";
 import ThemeProvider from "../providers/theme";
 import PromptConfigProvider from "../providers/prompt-config";
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Log to stderr to avoid corrupting the TUI
+    process.stderr.write(
+      `[Wright Error Boundary] ${error.message}\n${info.componentStack || ""}\n`,
+    );
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <box flexDirection="column" padding={2}>
+          <text bold color="red">
+            Something went wrong
+          </text>
+          <text color="gray">{this.state.error?.message || "Unknown error"}</text>
+        </box>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
@@ -12,9 +51,11 @@ export default function RootLayout() {
         <KeyBoardProvider>
           <DialogProvider>
             <ToastProvider>
-              <ThemedRoot>
-                <Outlet />
-              </ThemedRoot>
+              <ErrorBoundary>
+                <ThemedRoot>
+                  <Outlet />
+                </ThemedRoot>
+              </ErrorBoundary>
             </ToastProvider>
           </DialogProvider>
         </KeyBoardProvider>

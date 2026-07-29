@@ -1,6 +1,7 @@
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { Pool } from "pg";
 
+let pool: Pool | null = null;
 let checkpointer: PostgresSaver | null = null;
 let setupPromise: Promise<void> | null = null;
 
@@ -9,7 +10,7 @@ export function getCheckpointer() {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL is not set");
     }
-    const pool = new Pool({
+    pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 10,
     });
@@ -24,4 +25,13 @@ export function setupCheckpointer(): Promise<void> {
     setupPromise = cp.setup();
   }
   return setupPromise;
+}
+
+export async function shutdownCheckpointer(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    checkpointer = null;
+    setupPromise = null;
+  }
 }

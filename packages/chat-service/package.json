@@ -5,8 +5,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "start": "bun src/server.ts",
-    "dev": "bun --watch src/server.ts"
+    "start": "bun --preload ./src/env.ts src/server.ts",
+    "dev": "bun --watch --preload ./src/env.ts src/server.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.2.2",

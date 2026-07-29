@@ -8,35 +8,87 @@ import path from "node:path";
 dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.GATEWAY_PORT) || 3000;
 
-app.use(cors());
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS || "http://localhost:3000"
+).split(",");
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 
-// Proxy /api/session.* to session-service on port 3001
+const SESSION_SERVICE_URL =
+  process.env.SESSION_SERVICE_URL || "http://localhost:3001";
+const CHAT_SERVICE_URL =
+  process.env.CHAT_SERVICE_URL || "http://localhost:3002";
+
+// Proxy /api/session.* to session-service
 app.use(
   createProxyMiddleware({
-    target: "http://localhost:3001",
+    target: SESSION_SERVICE_URL,
     changeOrigin: true,
-    pathFilter: (pathname, req) => /^\/api\/session(?:[./]|$)/.test(pathname),
+    pathFilter: (pathname) => /^\/api\/session(?:[./]|$)/.test(pathname),
+    on: {
+      error: (err, _req, res) => {
+        console.error("Proxy error (session-service):", err.message);
+        if (res && "writeHead" in res) {
+          (res as http.ServerResponse).writeHead(502, {
+            "Content-Type": "application/json",
+          });
+          (res as http.ServerResponse).end(
+            JSON.stringify({ error: "Session service unavailable" }),
+          );
+        }
+      },
+    },
   }),
 );
 
-// Proxy /api/chat.* to chat-service on port 3002
+// Proxy /api/chat.* to chat-service
 app.use(
   createProxyMiddleware({
-    target: "http://localhost:3002",
+    target: CHAT_SERVICE_URL,
     changeOrigin: true,
-    pathFilter: (pathname, req) => /^\/api\/chat(?:[./]|$)/.test(pathname),
+    pathFilter: (pathname) => /^\/api\/chat(?:[./]|$)/.test(pathname),
+    on: {
+      error: (err, _req, res) => {
+        console.error("Proxy error (chat-service):", err.message);
+        if (res && "writeHead" in res) {
+          (res as http.ServerResponse).writeHead(502, {
+            "Content-Type": "application/json",
+          });
+          (res as http.ServerResponse).end(
+            JSON.stringify({ error: "Chat service unavailable" }),
+          );
+        }
+      },
+    },
   }),
 );
 
-app.get("/", (req, res) => {
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "api-gateway" });
+});
+
+app.get("/", (_req, res) => {
   res.send("API Gateway is running");
 });
 
 const server = http.createServer(app);
-server.setTimeout(0);
+// Use elevated timeout for SSE streaming, but never disable completely
+server.setTimeout(10 * 60 * 1000);
 
 server.listen(port, () => {
   console.log(`API Gateway listening on port ${port}`);
 });
+
+// Graceful shutdown
+const shutdown = () => {
+  console.log("API Gateway shutting down gracefully...");
+  server.close(() => {
+    console.log("API Gateway stopped.");
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

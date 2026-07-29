@@ -34,19 +34,25 @@ const chatValidatorMiddleware = middleware(async ({ next, path }) => {
 // Middleware to ensure the provided session ID actually exists
 const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
   const rawInput = await getRawInput();
-  const parsed = z.object({ sessionId: z.string() }).safeParse(rawInput);
+  const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(rawInput);
 
-  if (parsed.success) {
-    const session = await db.session.findUnique({
-      where: { id: parsed.data.sessionId },
+  if (!parsed.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid or missing sessionId",
     });
-    if (!session) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Session not found",
-      });
-    }
   }
+
+  const session = await db.session.findUnique({
+    where: { id: parsed.data.sessionId },
+  });
+  if (!session) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Session not found",
+    });
+  }
+
   return next();
 });
 

@@ -7,10 +7,7 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogle } from "@langchain/google";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-// import dotenv from "dotenv";
-// import path from "node:path";
 
-// dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 // Extract the specific model IDs dynamically based on the provider
 export type AnthropicModelId = Extract<
   SupportedChatModel,
