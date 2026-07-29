@@ -169,7 +169,7 @@ const SessionInner = ({ id }: { id: string }) => {
           >
             <BotMsg
               content={streamedContent}
-              model={DEFAULT_CHAT_MODEL_ID}
+              model={history.at(-1)?.model || DEFAULT_CHAT_MODEL_ID}
               reasoning={streamedReasoning}
               toolCalls={activeToolCalls}
               streaming={status === "streaming"}

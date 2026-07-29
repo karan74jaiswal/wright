@@ -7,13 +7,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
+import Spinner from "../components/spinner";
 
 type SessionsList = inferRouterOutputs<AppRouter>["session"]["listSessions"];
 type SessionItem = SessionsList[number];
 
 export default function SessionsDialog() {
   const trpc = useTRPC();
-  const { data: sessions = [] } = useQuery(
+  const { data: sessions = [], isLoading } = useQuery(
     trpc.session.listSessions.queryOptions(),
   );
   const { close } = useDialog();
@@ -33,6 +34,15 @@ export default function SessionsDialog() {
   const handleHighlight = useCallback((session: SessionItem) => {
     // TODO: add highlight logic
   }, []);
+
+  if (isLoading) {
+    return (
+      <box padding={2} justifyContent="center" alignItems="center" gap={1}>
+        <Spinner />
+        <text>Fetching sessions...</text>
+      </box>
+    );
+  }
 
   return (
     <DialogSearchList

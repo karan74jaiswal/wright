@@ -8,6 +8,7 @@ import { useTRPC } from "../lib/api-client";
 import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
 import { useToast } from "../providers/toast";
 import { ToastVariant } from "../providers/toast/types";
+import { usePromptConfig } from "../providers/prompt-config";
 
 const newSessionsStateSchema = z.object({
   message: z.string(),
@@ -23,6 +24,8 @@ const NewSession = () => {
     if (!parsed.success) return null;
     return parsed.data;
   }, [location.state]);
+
+  const { currentMode, currentModel, reasoningEffort, providerApiKeys } = usePromptConfig();
 
   //   const [msgs, setMsgs] = useState([]);
   //   const [loading, setLoading] = useState(false);
@@ -49,8 +52,8 @@ const NewSession = () => {
         cwd: process.cwd(),
         initialMessage: {
           content: state.message,
-          model: DEFAULT_CHAT_MODEL_ID,
-          mode: "BUILD",
+          model: currentModel,
+          mode: currentMode,
           role: "USER",
         },
       },
@@ -77,7 +80,7 @@ const NewSession = () => {
         },
       },
     );
-  }, [navigate, state, toast, createSessionMutation]);
+  }, [navigate, state, toast, createSessionMutation, currentModel, currentMode, reasoningEffort, providerApiKeys]);
 
   if (!state?.message) return null;
 

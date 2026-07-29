@@ -28,38 +28,72 @@ export type GoogleModelId = Extract<
 // The universal interface that all our models must adhere to
 export type ResolveModel = BaseChatModel;
 
-export function resolveAnthropicModel(modelId: AnthropicModelId): ResolveModel {
+interface ModelConfig {
+  apiKey?: string;
+  reasoningEffort?: string;
+}
+
+export function resolveAnthropicModel(
+  modelId: AnthropicModelId,
+  config?: ModelConfig,
+): ResolveModel {
   return new ChatAnthropic({
     model: modelId,
-    temperature: 0,
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    temperature: 1,
+    apiKey: config?.apiKey || process.env.ANTHROPIC_API_KEY,
   });
 }
 
-export function resolveOpenAIModel(modelId: OpenAIModelId): ResolveModel {
-  // Hardcode reasoning effort for o1 or o3-mini models
-  // Reasoning effort controls how deeply the model "thinks" before generating the output.
-  const isReasoningModel = modelId.startsWith("o1") || modelId.startsWith("o3");
+export function resolveOpenAIModel(
+  modelId: OpenAIModelId,
+  config?: ModelConfig,
+): ResolveModel {
+  const isReasoningModel =
+    modelId.startsWith("o1") ||
+    modelId.startsWith("o3") ||
+    modelId.startsWith("o4") ||
+    modelId.startsWith("gpt-5");
 
   return new ChatOpenAI({
     model: modelId,
-    temperature: isReasoningModel ? undefined : 0, // Reasoning models often don't support temperature
-    apiKey: process.env.OPENAI_API_KEY,
-    ...(isReasoningModel && { reasoning_effort: "high" }),
+    temperature: isReasoningModel ? undefined : 1,
+    apiKey: config?.apiKey || process.env.OPENAI_API_KEY,
+    ...(isReasoningModel && {
+      reasoning_effort: config?.reasoningEffort || "medium",
+    }),
   });
 }
 
-export function resolveGoogleModel(modelId: GoogleModelId): ResolveModel {
+export function resolveGoogleModel(
+  modelId: GoogleModelId,
+  config?: ModelConfig,
+): ResolveModel {
+  // All Gemini 2.5 and 3 models support reasoning steps
+  const isReasoningModel =
+    modelId.startsWith("gemini-3") ||
+    modelId.startsWith("gemini-2.5") ||
+    modelId.startsWith("gemini-2.0-flash-thinking");
+
+  // Map universal efforts to Google's supported levels
+  let googleEffort = config?.reasoningEffort || "medium";
+  if (googleEffort === "none") googleEffort = "low";
+  if (googleEffort === "xhigh" || googleEffort === "max") googleEffort = "high";
+
   return new ChatGoogle({
     model: modelId,
-    temperature: 1,
-    apiKey: process.env.GOOGLE_API_KEY,
-    thinkingLevel: "HIGH",
+    temperature: isReasoningModel ? undefined : 1,
+    apiKey: config?.apiKey || process.env.GOOGLE_API_KEY,
+    ...(isReasoningModel && {
+      reasoningEffort: googleEffort,
+    }),
   });
 }
 
 // Main factory router
-export function getLangChainModel(modelId: SupportedChatModelId): ResolveModel {
+export function getLangChainModel(
+  modelId: SupportedChatModelId,
+  config?: ModelConfig,
+): ResolveModel {
   const modelInfo = findChatSupportedModel(modelId);
 
   if (!modelInfo) {
@@ -68,11 +102,11 @@ export function getLangChainModel(modelId: SupportedChatModelId): ResolveModel {
 
   switch (modelInfo.provider) {
     case "anthropic":
-      return resolveAnthropicModel(modelInfo.id as AnthropicModelId);
+      return resolveAnthropicModel(modelInfo.id as AnthropicModelId, config);
     case "openai":
-      return resolveOpenAIModel(modelInfo.id as OpenAIModelId);
+      return resolveOpenAIModel(modelInfo.id as OpenAIModelId, config);
     case "google":
-      return resolveGoogleModel(modelInfo.id as GoogleModelId);
+      return resolveGoogleModel(modelInfo.id as GoogleModelId, config);
     default:
       // Exhaustive check
       throw new Error(`Provider not configured for model: ${modelId}`);

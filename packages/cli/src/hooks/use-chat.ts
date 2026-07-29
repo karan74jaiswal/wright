@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "../lib/api-client";
 import { useToast } from "../providers/toast";
 import { ToastVariant } from "../providers/toast/types";
+import { usePromptConfig } from "../providers/prompt-config";
 import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
@@ -39,6 +40,7 @@ export function useChat({
   const toast = useToast();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { currentMode, currentModel, reasoningEffort, providerApiKeys } = usePromptConfig();
 
   // Data State
   const [history, setHistory] = useState<Message[]>(initialMessages);
@@ -96,8 +98,10 @@ export function useChat({
     trpc.chat.streamChat.subscriptionOptions(
       {
         sessionId,
-        model: DEFAULT_CHAT_MODEL_ID,
-        mode: "BUILD",
+        model: currentModel,
+        mode: currentMode,
+        reasoningEffort,
+        providerApiKeys,
         ...(activeRequest || {}),
       },
       {
@@ -189,8 +193,8 @@ export function useChat({
         sessionId,
         role: "USER",
         content: text,
-        model: DEFAULT_CHAT_MODEL_ID,
-        mode: "BUILD",
+        model: currentModel,
+        mode: currentMode,
         status: "COMPLETED",
         duration: null,
         reasoning: null,
@@ -205,7 +209,7 @@ export function useChat({
       hasAutoResumedRef.current = true; // Prevent any auto-resume collisions
       setActiveRequest({ message: text, isAutoResume: false });
     },
-    [sessionId, status],
+    [sessionId, status, currentModel, currentMode],
   );
 
   const submitInterrupt = useCallback(
@@ -237,8 +241,8 @@ export function useChat({
         sessionId,
         role: "ASSISTANT",
         content: streamedContent,
-        model: DEFAULT_CHAT_MODEL_ID,
-        mode: "BUILD",
+        model: currentModel,
+        mode: currentMode,
         status: "INTERRUPTED",
         duration: null,
         reasoning: streamedReasoning || null,
@@ -274,6 +278,10 @@ export function useChat({
     streamedReasoning,
     activeToolCalls,
     cancelChatMutation,
+    currentModel,
+    currentMode,
+    reasoningEffort,
+    providerApiKeys,
   ]);
 
   const isLoading = status === "streaming" || status === "interrupted";

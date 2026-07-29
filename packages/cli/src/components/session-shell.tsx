@@ -6,6 +6,7 @@ import { useKeyboard } from "@opentui/react";
 
 import Spinner from "./spinner";
 import { useKeyboardLayer } from "../providers/keyboard";
+import { usePromptConfig } from "../providers/prompt-config";
 
 export interface SessionShellProps extends PropsWithChildren {
   onSubmit(text: string): void;
@@ -22,10 +23,17 @@ const SessionShell = ({
   loading = false,
 }: SessionShellProps) => {
   const { isTopLayer } = useKeyboardLayer();
+  const { currentMode, setMode } = usePromptConfig();
 
   useKeyboard((key) => {
-    if (key.name == "escape" && loading && onCancel && isTopLayer("base")) {
+    if (!isTopLayer("base")) return;
+    
+    if (key.name == "escape" && loading && onCancel) {
       onCancel();
+    }
+    
+    if (key.name == "tab" && !loading && !inputDisabled) {
+      setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
     }
   });
 

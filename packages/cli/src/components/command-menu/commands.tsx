@@ -1,4 +1,9 @@
-import { ThemeDialog, SessionsDialog } from "../../dialogs";
+import {
+  ThemeDialog,
+  SessionsDialog,
+  AgentsDialog,
+  ProvidersDialog,
+} from "../../dialogs";
 import { ToastVariant } from "../../providers/toast/types";
 import type { Command } from "./types";
 
@@ -18,11 +23,7 @@ export const COMMANDS: Command[] = [
     action: (ctx) => {
       ctx.dialog.open({
         title: "Agent Selection",
-        children: (
-          <box padding={1}>
-            <text>Agent Selection Coming Soon...</text>
-          </box>
-        ),
+        children: <AgentsDialog />,
       });
     },
   },
@@ -32,23 +33,17 @@ export const COMMANDS: Command[] = [
     value: "/models",
     action: (ctx) => {
       ctx.dialog.open({
-        children: (
-          <box padding={1}>
-            <text>Model Selection coming soon...</text>
-          </box>
-        ),
-        title: "Select Model",
+        children: <ProvidersDialog />,
+        title: "Select Provider",
       });
     },
   },
+
   {
     name: "sessions",
     description: "Browse past sessions",
     value: "/sessions",
     action: (ctx) => {
-      ctx.toast.show({
-        message: "Loading Sessions...",
-      });
       ctx.dialog.open({
         title: "Select Session",
         children: <SessionsDialog />,

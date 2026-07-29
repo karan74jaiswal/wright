@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { SUPPORTED_CHAT_MODELS } from "./models";
 
 export const toolCallArgsSchema = z.record(z.string(), z.any());
 
@@ -57,12 +58,22 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
 
 export type ChatStreamEvent = z.infer<typeof chatStreamEventSchema>;
 
+const supportedModelIds = SUPPORTED_CHAT_MODELS.map(m => m.id) as [string, ...string[]];
+
 export const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID is required"),
   message: z.string().optional(),
   resume: z.any().optional(),
-  model: z.string().min(1, "Model ID is required"),
+  model: z.string().refine((val) => supportedModelIds.includes(val), {
+    message: "Invalid or unsupported Model ID",
+  }),
   mode: z.enum(["BUILD", "PLAN"]).default("BUILD"),
+  reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
+  providerApiKeys: z.object({
+    openai: z.string().optional(),
+    anthropic: z.string().optional(),
+    google: z.string().optional(),
+  }).optional(),
   isAutoResume: z.boolean().optional(),
 });
 

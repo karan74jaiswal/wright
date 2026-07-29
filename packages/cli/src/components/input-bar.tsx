@@ -13,6 +13,7 @@ import { useKeyboardLayer } from "../providers/keyboard";
 import { useDialog } from "../providers/dialog";
 
 import { useTheme } from "../providers/theme";
+import { usePromptConfig } from "../providers/prompt-config";
 import { useNavigate } from "react-router";
 
 interface InputBarProps {
@@ -49,6 +50,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
   const navigate = useNavigate();
   const { isTopLayer, setResponder } = useKeyboardLayer();
   const { colors } = useTheme();
+  const { currentMode } = usePromptConfig();
   const {
     showCommandMenu,
     commandQuery,
@@ -122,7 +124,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
       <box
         border={["left"]}
         customBorderChars={SplitBorder.customBorderChars}
-        borderColor={colors.primary}
+        borderColor={currentMode === "PLAN" ? colors.planMode : colors.primary}
         width="100%"
       >
         <box
