@@ -1,7 +1,7 @@
 import type { ChatRequest, ChatStreamEvent } from "@wright/shared";
 import { createAgentGraph } from "./graph";
 import { setupCheckpointer } from "./lib/checkpointer";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { Command } from "@langchain/langgraph";
 import { prisma as db } from "@wright/database/client";
 import { Role, MessageStatus, Mode } from "@wright/database/enums";
@@ -16,12 +16,15 @@ export async function* streamAgent(
   let fullText = "";
   let fullReasoning = "";
   let reasoningDurationMs: number | null = null;
+  
+  let graph: ReturnType<typeof createAgentGraph> | null = null;
+  let config: any = null;
 
   const persistInterruptedMessage = async () => {
-    if (fullText.length === 0) return;
+    if (fullText.length === 0 && fullReasoning.length === 0) return;
     const elapsedMs = Date.now() - startTime;
     try {
-      await db.message.create({
+      const created = await db.message.create({
         data: {
           sessionId,
           role: Role.ASSISTANT,
@@ -35,8 +38,17 @@ export async function* streamAgent(
           duration: elapsedMs,
         },
       });
+
+      if (graph && config) {
+        // Sync the LangChain message ID with Prisma's generated CUID
+        const partialMsg = new AIMessage({
+          content: fullText,
+          id: created.id,
+        });
+        await graph.updateState(config, { messages: [partialMsg] }, "agent");
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to persist interrupted message:", e);
     }
   };
 
@@ -57,9 +69,9 @@ export async function* streamAgent(
     }
 
     const newMessages = message ? [new HumanMessage(message)] : [];
-    const graph = createAgentGraph();
+    graph = createAgentGraph();
 
-    const config = {
+    config = {
       configurable: { thread_id: sessionId, modelId: model, mode, reasoningEffort, providerApiKeys },
     };
 

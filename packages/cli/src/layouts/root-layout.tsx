@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Outlet } from "react-router";
+import { TextAttributes } from "@opentui/core";
 import KeyBoardProvider from "../providers/keyboard";
 import DialogProvider from "../providers/dialog";
 import ToastProvider from "../providers/toast";
@@ -22,21 +23,21 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     // Log to stderr to avoid corrupting the TUI
     process.stderr.write(
       `[Wright Error Boundary] ${error.message}\n${info.componentStack || ""}\n`,
     );
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <box flexDirection="column" padding={2}>
-          <text bold color="red">
+          <text attributes={TextAttributes.BOLD} fg="red">
             Something went wrong
           </text>
-          <text color="gray">{this.state.error?.message || "Unknown error"}</text>
+          <text fg="gray">{this.state.error?.message || "Unknown error"}</text>
         </box>
       );
     }

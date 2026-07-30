@@ -1,6 +1,6 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
-import type { AppRouter } from "./packages/api-gateway/src/index";
+import type { AppRouter } from "@wright/api-gateway";
 
 const client = createTRPCClient<AppRouter>({
   links: [
