@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useEffect, useMemo, memo, useState } from "react";
+import { useEffect, useMemo, memo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../providers/theme";
 import SessionShell from "../components/session-shell";
@@ -27,9 +27,18 @@ const sessionLocationSchema = z.object({
 interface ChatMessageProps {
   msg: SessionData["messages"][number];
   showReasoning: boolean;
+  hideFooter?: boolean;
+  hideHeader?: boolean;
+  groupDuration?: number;
 }
 
-const ChatMessage = memo(function ChatMessage({ msg, showReasoning }: ChatMessageProps) {
+const ChatMessage = memo(function ChatMessage({
+  msg,
+  showReasoning,
+  hideFooter,
+  hideHeader,
+  groupDuration,
+}: ChatMessageProps) {
   if (msg.role === "USER") return <UserMsg message={msg.content} />;
   if (msg.role === "ERROR") return <ErrorMsg message={msg.content} />;
   if (msg.role === "TOOL") return null;
@@ -68,9 +77,11 @@ const ChatMessage = memo(function ChatMessage({ msg, showReasoning }: ChatMessag
       toolCalls={parsedToolCalls}
       mode={msg.mode}
       status={msg.status}
-      duration={msg.duration}
+      duration={groupDuration ?? msg.duration}
       showReasoning={showReasoning}
       reasoningEffort={msg.reasoningEffort}
+      hideFooter={hideFooter}
+      hideHeader={hideHeader}
     />
   );
 });
@@ -84,12 +95,14 @@ const SessionInner = ({ id }: { id: string }) => {
   const [showReasoning, setShowReasoning] = useState(false);
   const { isTopLayer } = useKeyboardLayer();
 
-  useKeyboard((key) => {
-    if (!isTopLayer("base")) return;
-    if (key.ctrl && key.name === "o") {
-      setShowReasoning((prev) => !prev);
-    }
-  });
+  useKeyboard(
+    useCallback((key: any) => {
+      if (!isTopLayer("base")) return;
+      if (key.ctrl && key.name === "o") {
+        setShowReasoning((prev) => !prev);
+      }
+    }, [isTopLayer])
+  );
 
   const prefetched = useMemo(() => {
     const parsed = sessionLocationSchema.safeParse(location.state);
@@ -143,8 +156,24 @@ const SessionInner = ({ id }: { id: string }) => {
     initialMessages,
   });
 
+  const lastVisibleMsg = useMemo(() => {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const msg = history[i];
+      if (msg && msg.role !== "TOOL" && msg.role !== "SYSTEM") {
+        return msg;
+      }
+    }
+    return null;
+  }, [history]);
+
   if (!session)
     return <SessionShell onSubmit={(_t) => {}} inputDisabled loading />;
+
+  const isStreamingAiPresent = !!(
+    streamedContent ||
+    streamedReasoning ||
+    Object.keys(activeToolCalls).length > 0
+  );
 
   return (
     <SessionShell
@@ -154,16 +183,66 @@ const SessionInner = ({ id }: { id: string }) => {
       loading={isLoading}
     >
       {[
-        ...history.map((msg) => (
-          <box
-            key={msg.id}
-            flexDirection="column"
-            width="100%"
-            paddingBottom={1}
-          >
-            <ChatMessage msg={msg} showReasoning={showReasoning} />
-          </box>
-        )),
+        ...history.map((msg, i, arr) => {
+          let prevVisibleMsg;
+          for (let j = i - 1; j >= 0; j--) {
+            const m = arr[j];
+            if (m && m.role !== "TOOL" && m.role !== "SYSTEM") {
+              prevVisibleMsg = m;
+              break;
+            }
+          }
+
+          let nextVisibleMsg;
+          for (let j = i + 1; j < arr.length; j++) {
+            const m = arr[j];
+            if (m && m.role !== "TOOL" && m.role !== "SYSTEM") {
+              nextVisibleMsg = m;
+              break;
+            }
+          }
+
+          const isPrevAi = prevVisibleMsg?.role === "ASSISTANT";
+          const isNextAi =
+            nextVisibleMsg?.role === "ASSISTANT" ||
+            (!nextVisibleMsg && isStreamingAiPresent);
+
+          const hideFooter = isNextAi && msg.role === "ASSISTANT";
+          const hideHeader = isPrevAi && msg.role === "ASSISTANT";
+
+          // Calculate total duration for the grouped block
+          let groupDuration = msg.duration || 0;
+          if (!hideFooter && msg.role === "ASSISTANT") {
+            for (let j = i - 1; j >= 0; j--) {
+              const m = arr[j];
+              if (!m) continue;
+              if (m.role === "USER" || m.role === "ERROR") break;
+              if (m.duration) {
+                groupDuration += m.duration;
+              }
+            }
+          }
+
+          // Don't render boxes for invisible messages
+          if (msg.role === "TOOL" || msg.role === "SYSTEM") return null;
+
+          return (
+            <box
+              key={msg.id}
+              flexDirection="column"
+              width="100%"
+              paddingBottom={hideFooter ? 0 : 1}
+            >
+              <ChatMessage
+                msg={msg}
+                showReasoning={showReasoning}
+                hideFooter={hideFooter}
+                hideHeader={hideHeader}
+                groupDuration={groupDuration}
+              />
+            </box>
+          );
+        }),
         streamedContent ||
         streamedReasoning ||
         Object.keys(activeToolCalls).length > 0 ? (
@@ -175,14 +254,16 @@ const SessionInner = ({ id }: { id: string }) => {
           >
             <BotMsg
               content={streamedContent}
-              model={history.at(-1)?.model || DEFAULT_CHAT_MODEL_ID}
+              model={lastVisibleMsg?.model || DEFAULT_CHAT_MODEL_ID}
               reasoning={streamedReasoning}
               toolCalls={activeToolCalls}
               streaming={status === "streaming"}
-              mode={history.at(-1)?.mode}
+              mode={lastVisibleMsg?.mode}
               status={status === "interrupted" ? "INTERRUPTED" : undefined}
               showReasoning={showReasoning}
-              reasoningEffort={history.at(-1)?.reasoningEffort}
+              reasoningEffort={lastVisibleMsg?.reasoningEffort}
+              hideFooter={false}
+              hideHeader={lastVisibleMsg?.role === "ASSISTANT"}
             />
           </box>
         ) : null,

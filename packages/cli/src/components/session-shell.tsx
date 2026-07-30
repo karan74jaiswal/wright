@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from "react";
+import { type PropsWithChildren, useCallback } from "react";
 
 import { InputBar } from "./input-bar";
 import { TextAttributes } from "@opentui/core";
@@ -25,17 +25,19 @@ const SessionShell = ({
   const { isTopLayer } = useKeyboardLayer();
   const { currentMode, setMode } = usePromptConfig();
 
-  useKeyboard((key) => {
-    if (!isTopLayer("base")) return;
-    
-    if (key.name == "escape" && loading && onCancel) {
-      onCancel();
-    }
-    
-    if (key.name == "tab" && !loading && !inputDisabled) {
-      setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
-    }
-  });
+  useKeyboard(
+    useCallback((key: any) => {
+      if (!isTopLayer("base")) return;
+      
+      if (key.name == "escape" && loading && onCancel) {
+        onCancel();
+      }
+      
+      if (key.name == "tab" && !loading && !inputDisabled) {
+        setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
+      }
+    }, [isTopLayer, loading, onCancel, inputDisabled, setMode, currentMode])
+  );
 
   return (
     <box

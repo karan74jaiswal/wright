@@ -19,6 +19,8 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@anscribe/mcp": "^1.0.1",
+    "@anscribe/opentui": "^1.0.1",
     "@opentui/core": "^0.4.1",
     "@opentui/react": "^0.4.3",
     "@tanstack/react-query": "^5.101.2",

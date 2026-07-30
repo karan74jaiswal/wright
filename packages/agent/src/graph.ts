@@ -12,10 +12,10 @@ import type { Mode } from "@wright/database/enums";
 import { getCheckpointer } from "./lib/checkpointer";
 import { buildSystemPrompt } from "./lib/prompts";
 
-import { dummySearch, askPermission, askQuestion } from "./lib/tools";
+import { askPermission, askQuestion, readFileTool, writeFileTool, runCommandTool, listDirectoryTool } from "./lib/tools";
 
-const buildTools = [dummySearch, askPermission, askQuestion];
-const planTools = [dummySearch, askQuestion]; // Expand later
+const buildTools = [readFileTool, writeFileTool, runCommandTool, listDirectoryTool, askPermission, askQuestion];
+const planTools = [readFileTool, listDirectoryTool, askQuestion]; // Read-only tools + clarification
 
 // Node: Agent
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {

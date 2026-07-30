@@ -1,4 +1,6 @@
 import { createCliRenderer, ConsolePosition } from "@opentui/core";
+import { installCapture } from "@anscribe/opentui";
+import "@anscribe/mcp/sink";
 import { createRoot } from "@opentui/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import RootLayout from "./layouts/root-layout";
@@ -6,7 +8,12 @@ import Home from "./screens/home";
 import NewSession from "./screens/new-session";
 import Session from "./screens/session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, httpSubscriptionLink, splitLink, createTRPCClient } from "@trpc/client";
+import {
+  httpBatchLink,
+  httpSubscriptionLink,
+  splitLink,
+  createTRPCClient,
+} from "@trpc/client";
 import { TRPCProvider } from "./lib/api-client";
 import type { AppRouter } from "@wright/api-gateway";
 import { EventSource } from "eventsource";
@@ -40,7 +47,11 @@ const trpcClient = createTRPCClient<AppRouter>({
   links: [
     splitLink({
       condition: (op) => op.type === "subscription",
-      true: httpSubscriptionLink({ url, EventSource: EventSource as any, transformer: superjson }),
+      true: httpSubscriptionLink({
+        url,
+        EventSource: EventSource as any,
+        transformer: superjson,
+      }),
       false: httpBatchLink({ url, transformer: superjson }),
     }),
   ],
@@ -70,5 +81,7 @@ const renderer = await createCliRenderer({
   targetFps: 60,
   exitOnCtrlC: false,
 });
+
+installCapture(renderer, { keybinding: "ctrl+x" });
 
 createRoot(renderer).render(<App />);

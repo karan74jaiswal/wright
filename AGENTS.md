@@ -25,3 +25,11 @@ When starting a new session or debugging an issue, please read the architectural
 - **Database (`@wright/database`)**: PostgreSQL via Prisma.
 
 Always ensure you understand the flow of events across these 5 packages before making breaking changes to the state management or streaming protocols.
+
+## Git Operations
+
+- **CRITICAL**: Do NOT run or ask to run `git add`, `git commit`, or `git push` automatically. Only perform these actions when explicitly ordered or requested by the user.
+
+## Explicit Planning
+
+- **CRITICAL**: If the user explicitly asks for a plan first before execution, you MUST ONLY perform read operations (explore codebase, read files) to formulate a detailed step-by-step plan. DO NOT execute any state-mutating tasks (create, edit, delete files or run destructive commands) until the user explicitly approves the plan in a subsequent prompt.

@@ -53,10 +53,16 @@ export function InterruptPrompt({ payload, onSubmit }: InterruptPromptProps) {
     if (!isTopLayer("interrupt")) return;
 
     if (key.name === "down") {
+      if ((key as any).preventDefault) (key as any).preventDefault();
+      if ((key as any).stopPropagation) (key as any).stopPropagation();
       setSelectedIndex((prev) => Math.min(prev + 1, options.length - 1));
     } else if (key.name === "up") {
+      if ((key as any).preventDefault) (key as any).preventDefault();
+      if ((key as any).stopPropagation) (key as any).stopPropagation();
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
     } else if (key.name === "enter" || key.name === "return") {
+      if ((key as any).preventDefault) (key as any).preventDefault();
+      if ((key as any).stopPropagation) (key as any).stopPropagation();
       onSubmit(options[selectedIndex]);
     }
   });

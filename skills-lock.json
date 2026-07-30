@@ -23,7 +23,7 @@
       "source": "langchain-ai/langchain-skills",
       "sourceType": "github",
       "skillPath": "config/skills/ecosystem-primer/SKILL.md",
-      "computedHash": "792007c035568732166705ab3b2e01b29fff39f4630e974226e7e2ca5fea4352"
+      "computedHash": "cdcbe9115ec444518fc963fa1a5425aacad984f2b03c5e56980e4f9ad3888bc1"
     },
     "langchain-dependencies": {
       "source": "langchain-ai/langchain-skills",
@@ -47,7 +47,7 @@
       "source": "langchain-ai/langchain-skills",
       "sourceType": "github",
       "skillPath": "config/skills/langchain-rag/SKILL.md",
-      "computedHash": "53fa807b2094c4ee9136ff23a9330321c1a22959870e4a1f7bd53b753b623f94"
+      "computedHash": "d836f8a425104fe4e925135cb06a1217c2ded6576ee426e11e3f657e6c371da4"
     },
     "langgraph-cli": {
       "source": "langchain-ai/langchain-skills",
@@ -83,7 +83,7 @@
       "source": "anomalyco/opentui",
       "sourceType": "github",
       "skillPath": "packages/web/src/content/SKILL.md",
-      "computedHash": "91564dd09a740dde98c81e0668664d32c2ed77551c3139e3552d4906b8e3ecba"
+      "computedHash": "9750356a385419f792fb1b17981d9c5f13817efdff6048f390df579be5b2e47a"
     },
     "sentry-android-sdk": {
       "source": "getsentry/sentry-for-ai",
