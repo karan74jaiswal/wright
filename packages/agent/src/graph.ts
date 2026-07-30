@@ -10,18 +10,12 @@ import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import type { Mode } from "@wright/database/enums";
 import { getCheckpointer } from "./lib/checkpointer";
+import { getSystemPrompt } from "./lib/prompts";
 
 import { dummySearch, askPermission, askQuestion } from "./lib/tools";
 
 const buildTools = [dummySearch, askPermission, askQuestion];
 const planTools = [dummySearch, askQuestion]; // Expand later
-
-const getSystemPrompt = (mode: Mode) => {
-  if (mode === "PLAN") {
-    return new SystemMessage("You are an expert Software Architect. Focus on designing systems, outlining steps, and researching best practices.");
-  }
-  return new SystemMessage("You are an expert pair programmer. Focus on writing clean, robust code and executing commands to build the user's project.");
-};
 
 // Node: Agent
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {

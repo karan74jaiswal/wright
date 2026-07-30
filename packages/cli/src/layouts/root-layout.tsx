@@ -6,7 +6,8 @@ import DialogProvider from "../providers/dialog";
 import ToastProvider from "../providers/toast";
 import ThemedRoot from "./themed-root";
 import ThemeProvider from "../providers/theme";
-import PromptConfigProvider from "../providers/prompt-config";
+import PromptConfigProvider, { usePromptConfig } from "../providers/prompt-config";
+import TrustWorkspaceScreen from "../screens/trust-workspace";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -45,21 +46,33 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 }
 
+function InnerLayout() {
+  const { trustedWorkspaces } = usePromptConfig();
+
+  if (!trustedWorkspaces[process.cwd()]) {
+    return <TrustWorkspaceScreen />;
+  }
+
+  return (
+    <KeyBoardProvider>
+      <DialogProvider>
+        <ToastProvider>
+          <ErrorBoundary>
+            <ThemedRoot>
+              <Outlet />
+            </ThemedRoot>
+          </ErrorBoundary>
+        </ToastProvider>
+      </DialogProvider>
+    </KeyBoardProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
       <PromptConfigProvider>
-        <KeyBoardProvider>
-          <DialogProvider>
-            <ToastProvider>
-              <ErrorBoundary>
-                <ThemedRoot>
-                  <Outlet />
-                </ThemedRoot>
-              </ErrorBoundary>
-            </ToastProvider>
-          </DialogProvider>
-        </KeyBoardProvider>
+        <InnerLayout />
       </PromptConfigProvider>
     </ThemeProvider>
   );

@@ -30,6 +30,8 @@ interface PromptConfigContextValue {
   setModel(model: SupportedChatModelId): void;
   setReasoningEffort(effort: ReasoningEffort): void;
   setApiKeys(keys: Partial<ProviderApiKeys>): void;
+  trustedWorkspaces: Record<string, boolean>;
+  setTrustedWorkspace(path: string, trusted: boolean): void;
 }
 
 interface PromptPreferences {
@@ -37,6 +39,7 @@ interface PromptPreferences {
   model?: SupportedChatModelId;
   reasoningEffort?: ReasoningEffort;
   providerApiKeys?: ProviderApiKeys;
+  trustedWorkspaces?: Record<string, boolean>;
 }
 
 const PromptConfigContext = createContext<PromptConfigContextValue | null>(null);
@@ -57,6 +60,7 @@ function getInitialConfig(): PromptPreferences {
       model: preferences.model || DEFAULT_CHAT_MODEL_ID,
       reasoningEffort: (preferences.reasoningEffort as ReasoningEffort) || "high",
       providerApiKeys: preferences.providerApiKeys || {},
+      trustedWorkspaces: preferences.trustedWorkspaces || {},
     };
   } catch (err: any) {
     return {
@@ -64,6 +68,7 @@ function getInitialConfig(): PromptPreferences {
       model: DEFAULT_CHAT_MODEL_ID,
       reasoningEffort: "high",
       providerApiKeys: {},
+      trustedWorkspaces: {},
     };
   }
 }
@@ -99,6 +104,7 @@ export default function PromptConfigProvider({
   const [currentModel, setCurrentModel] = useState<SupportedChatModelId>(initialConfig.model as SupportedChatModelId);
   const [reasoningEffort, setCurrentReasoningEffort] = useState<ReasoningEffort>((initialConfig.reasoningEffort as ReasoningEffort) || "high");
   const [providerApiKeys, setCurrentApiKeys] = useState<ProviderApiKeys>(initialConfig.providerApiKeys || {});
+  const [trustedWorkspaces, setTrustedWorkspaces] = useState<Record<string, boolean>>(initialConfig.trustedWorkspaces || {});
 
   const setMode = useCallback((mode: Mode) => {
     setCurrentMode(mode);
@@ -123,9 +129,17 @@ export default function PromptConfigProvider({
     });
   }, []);
 
+  const setTrustedWorkspace = useCallback((path: string, trusted: boolean) => {
+    setTrustedWorkspaces((prev) => {
+      const next = { ...prev, [path]: trusted };
+      persistConfig({ trustedWorkspaces: next });
+      return next;
+    });
+  }, []);
+
   const values = useMemo(
-    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys }),
-    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys],
+    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace }),
+    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace],
   );
   return (
     <PromptConfigContext.Provider value={values}>{children}</PromptConfigContext.Provider>
