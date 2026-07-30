@@ -10,7 +10,7 @@ import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import type { Mode } from "@wright/database/enums";
 import { getCheckpointer } from "./lib/checkpointer";
-import { getSystemPrompt } from "./lib/prompts";
+import { buildSystemPrompt } from "./lib/prompts";
 
 import { dummySearch, askPermission, askQuestion } from "./lib/tools";
 
@@ -21,6 +21,8 @@ const planTools = [dummySearch, askQuestion]; // Expand later
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   const modelId = config?.configurable?.modelId as SupportedChatModelId;
   const mode = (config?.configurable?.mode as Mode) || "BUILD";
+  const sessionCwd = config?.configurable?.sessionCwd as string;
+  const activeCwd = config?.configurable?.activeCwd as string | undefined;
   const reasoningEffort = config?.configurable?.reasoningEffort as string | undefined;
   const providerApiKeys = config?.configurable?.providerApiKeys as Record<string, string | undefined> | undefined;
 
@@ -53,7 +55,7 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   // If the first message is a system message, replace it (mode may have changed).
   // Otherwise, prepend the system prompt.
   let messages = state.messages;
-  const systemPrompt = getSystemPrompt(mode);
+  const systemPrompt = buildSystemPrompt({ mode, sessionCwd, activeCwd });
   if (messages.length === 0) {
     messages = [systemPrompt];
   } else if (

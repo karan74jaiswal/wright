@@ -10,7 +10,7 @@ export async function* streamAgent(
   input: ChatRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const { sessionId, message, resume, model, mode, isAutoResume, reasoningEffort, providerApiKeys } = input;
+  const { sessionId, message, activeCwd, resume, model, mode, isAutoResume, reasoningEffort, providerApiKeys } = input;
 
   let startTime = Date.now();
   let fullText = "";
@@ -55,6 +55,14 @@ export async function* streamAgent(
   try {
     await setupCheckpointer();
 
+    const session = await db.session.findUnique({
+      where: { id: sessionId },
+      select: { cwd: true }
+    });
+    
+    // If we can't find session cwd (e.g. invalid session), fallback to process.cwd() or activeCwd
+    const sessionCwd = session?.cwd || activeCwd || process.cwd();
+
     if (message && !isAutoResume) {
       await db.message.create({
         data: {
@@ -72,7 +80,7 @@ export async function* streamAgent(
     graph = createAgentGraph();
 
     config = {
-      configurable: { thread_id: sessionId, modelId: model, mode, reasoningEffort, providerApiKeys },
+      configurable: { thread_id: sessionId, modelId: model, mode, reasoningEffort, providerApiKeys, sessionCwd, activeCwd },
     };
 
     const currentState = await graph.getState(config);

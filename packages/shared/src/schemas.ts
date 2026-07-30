@@ -63,6 +63,7 @@ const supportedModelIds = SUPPORTED_CHAT_MODELS.map(m => m.id) as [string, ...st
 export const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID is required").max(255),
   message: z.string().optional(),
+  activeCwd: z.string().optional(),
   resume: z.unknown().optional(),
   model: z.string().refine((val) => supportedModelIds.includes(val), {
     message: "Invalid or unsupported Model ID",

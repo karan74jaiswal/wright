@@ -56,6 +56,7 @@ export function useChat({
   const [activeRequest, setActiveRequest] = useState<{
     message?: string;
     resume?: any;
+    activeCwd?: string;
     isAutoResume?: boolean;
   } | null>(null);
 
@@ -87,6 +88,7 @@ export function useChat({
         setStatus("streaming");
         setActiveRequest({
           message: lastMsg.content,
+          activeCwd: process.cwd(),
           isAutoResume: true,
         });
       }
@@ -206,7 +208,7 @@ export function useChat({
       setHistory((prev) => [...prev, optimisticMsg]);
       setStatus("streaming");
       hasAutoResumedRef.current = true; // Prevent any auto-resume collisions
-      setActiveRequest({ message: text, isAutoResume: false });
+      setActiveRequest({ message: text, activeCwd: process.cwd(), isAutoResume: false });
     },
     [sessionId, status, currentModel, currentMode],
   );
