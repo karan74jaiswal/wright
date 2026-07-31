@@ -13,7 +13,9 @@ export const readFileTool = tool(
       name: "read_file",
       args: { path }
     });
-    return String(result);
+    const resStr = String(result);
+    if (resStr === "Cancel") throw new Error(`User denied permission for read_file(${path})`);
+    return resStr;
   },
   {
     name: "read_file",
@@ -31,7 +33,9 @@ export const writeFileTool = tool(
       name: "write_file",
       args: { path, content }
     });
-    return String(result);
+    const resStr = String(result);
+    if (resStr === "Cancel") throw new Error(`User denied permission for write_file(${path})`);
+    return resStr;
   },
   {
     name: "write_file",
@@ -50,7 +54,9 @@ export const runCommandTool = tool(
       name: "run_command",
       args: { command }
     });
-    return String(result);
+    const resStr = String(result);
+    if (resStr === "Cancel") throw new Error(`User denied permission for run_command(${command})`);
+    return resStr;
   },
   {
     name: "run_command",
@@ -68,7 +74,9 @@ export const listDirectoryTool = tool(
       name: "list_directory",
       args: { path }
     });
-    return String(result);
+    const resStr = String(result);
+    if (resStr === "Cancel") throw new Error(`User denied permission for list_directory(${path})`);
+    return resStr;
   },
   {
     name: "list_directory",
@@ -91,7 +99,9 @@ export const askPermission = tool(
       target,
       reason,
     });
-    return String(humanDecision);
+    const resStr = String(humanDecision);
+    if (resStr === "No, reject" || resStr === "Cancel") throw new Error(`User denied permission for ask_permission(${target})`);
+    return resStr;
   },
   {
     name: "ask_permission",

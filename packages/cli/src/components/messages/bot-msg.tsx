@@ -5,6 +5,7 @@ import { Mode } from "@wright/database/enums";
 import prettyMilliseconds from "pretty-ms";
 import ThinkingSpinner from "../thinking-spinner";
 import { usePromptConfig } from "../../providers/prompt-config";
+import { EmptyBorder } from "../border";
 
 export interface BotMsgProps {
   content: string;
@@ -20,6 +21,34 @@ export interface BotMsgProps {
   reasoningEffort?: string | null;
   hideFooter?: boolean;
   hideHeader?: boolean;
+}
+
+function getToolResultStatus(result: any): { label: string; color: string; errorMsg?: string } {
+  if (typeof result !== "string") return { label: "(Success)", color: "success" };
+  
+  const lower = result.toLowerCase().trim();
+  
+  // If a tool explicitly throws an error or fails, LangGraph prefixes with Error: or similar
+  if (lower.startsWith("error:") || lower.startsWith("error ") || lower.includes("user denied permission")) {
+    // Check if it's a denial
+    if (lower.includes("denied permission") || lower.includes("declined")) {
+      return { label: "(Failed)", color: "error", errorMsg: "User declined the tool call" };
+    }
+    return { label: "(Failed)", color: "error", errorMsg: result };
+  }
+  
+  return { label: "(Success)", color: "success" };
+}
+
+export function formatToolName(name: any): string {
+  if (!name) return "";
+  if (typeof name !== "string") return String(name);
+  // Split on underscores, hyphens, or colons
+  return name
+    .split(/[_:-]/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 }
 
 export const BotMsg = ({
@@ -57,34 +86,47 @@ export const BotMsg = ({
 
   return (
     <box width="100%" alignItems="flex-start" flexDirection="column">
-      <box paddingTop={hideHeader ? 0 : 1} paddingBottom={hideFooter ? 0 : 1} width="100%" flexDirection="column">
+      <box
+        paddingTop={hideHeader ? 0 : 1}
+        paddingBottom={hideFooter ? 0 : 1}
+        width="100%"
+        flexDirection="column"
+      >
         {reasoning ? (
           <box
-            paddingX={3}
+            paddingX={2}
             width="100%"
-            paddingBottom={1}
+            border={["left"]}
+            borderColor={colors.thinkingBorder}
+            paddingY={1}
+            customBorderChars={{
+              ...EmptyBorder,
+              vertical: "│",
+            }}
             flexDirection="column"
             gap={showReasoning ? 1 : 0}
           >
             <box flexDirection="row" gap={1}>
-              <text fg={colors.dimSeparator}>
-                {showReasoning ? "▼" : "▶"}{" "}
-                {streaming
-                  ? "Thinking..."
-                  : `Thought${reasoningDuration ? ` for ${prettyMilliseconds(reasoningDuration)}` : ""}`}
+              <text attributes={TextAttributes.DIM}>
+                <em fg={colors.thinking}>
+                  {showReasoning ? "▼" : "▶"}{" "}
+                  {streaming
+                    ? "Thinking..."
+                    : `Thought${reasoningDuration ? ` for ${prettyMilliseconds(reasoningDuration)}` : ""}`}
+                </em>
               </text>
 
               {streaming ? <ThinkingSpinner /> : null}
               <text attributes={TextAttributes.DIM}>
-                {showReasoning
-                  ? "(ctrl + o to collapse)"
-                  : "(ctrl + o to expand)"}
+                <em fg={colors.thinking}>
+                  {showReasoning
+                    ? "(ctrl + o to collapse)"
+                    : "(ctrl + o to expand)"}
+                </em>
               </text>
             </box>
             {showReasoning && (
-              <text fg={colors.dimSeparator} attributes={TextAttributes.ITALIC}>
-                {reasoning}
-              </text>
+              <text attributes={TextAttributes.DIM}>{reasoning}</text>
             )}
           </box>
         ) : null}
@@ -97,10 +139,16 @@ export const BotMsg = ({
 
         {toolCalls && Object.values(toolCalls).length > 0 ? (
           <box
-            paddingX={3}
+            border={["left"]}
+            borderColor={colors.thinkingBorder}
+            customBorderChars={{
+              ...EmptyBorder,
+              vertical: "│",
+            }}
+            paddingX={2}
             width="100%"
             paddingTop={content ? 1 : 0}
-            paddingBottom={1}
+            // paddingBottom={1}
             flexDirection="column"
           >
             {Object.values(toolCalls).map((tc, idx) => {
@@ -113,46 +161,91 @@ export const BotMsg = ({
                 // Keep raw string if JSON parsing fails
               }
 
+              // Hide options for completed ask_question to keep history clean
+              if (parsedArgsObj && tc.name === "ask_question" && tc.result) {
+                delete parsedArgsObj.options;
+                delete parsedArgsObj.isMultiSelect;
+              }
+
+              const statusInfo = tc.result
+                ? getToolResultStatus(tc.result)
+                : { label: "(Executing...)", color: "dimSeparator" as const };
+              const statusColor = (colors as any)[statusInfo.color] || colors.success;
+
               return (
                 <box
                   key={idx}
                   flexDirection="column"
-                  paddingBottom={showReasoning ? 1 : 0}
+                  paddingX={2}
+                  paddingTop={idx === 0 ? 0 : 1}
                 >
                   <box flexDirection="row" gap={1}>
-                    <text fg={colors.dimSeparator}>
-                      {showReasoning ? "▼" : "▶"}
+                    <text attributes={TextAttributes.DIM}>
+                      <em fg={colors.info}>{showReasoning ? "▼" : "▶"}</em>
                     </text>
-                    <text fg={colors.primary}>⚡ {tc.name}</text>
+                    <text attributes={TextAttributes.DIM}>
+                      <em fg={colors.info}>⚡ {formatToolName(tc.name)}</em>
+                    </text>
                     {tc.result ? (
-                      <text fg={colors.success}> (Success)</text>
+                      <text fg={statusColor} attributes={TextAttributes.DIM}>
+                        {statusInfo.label}
+                      </text>
                     ) : (
-                      <text fg={colors.dimSeparator}> (Executing...)</text>
+                      <text
+                        fg={colors.dimSeparator}
+                        attributes={TextAttributes.DIM}
+                      >
+                        (Executing...)
+                      </text>
                     )}
                   </box>
 
                   {showReasoning && (
                     <box flexDirection="column" paddingLeft={2} paddingTop={1}>
                       {parsedArgsObj && typeof parsedArgsObj === "object" ? (
-                        Object.entries(parsedArgsObj).map(([key, value]) => {
-                          let displayValue =
-                            typeof value === "object"
-                              ? JSON.stringify(value)
-                              : String(value);
-                          // Truncate long strings for UI sanity
-                          if (displayValue.length > 200) {
-                            displayValue = displayValue.slice(0, 200) + "...";
-                          }
-                          return (
-                            <box key={key} flexDirection="row" gap={1}>
-                              <text fg={colors.primary}>{key}:</text>
-                              <text fg={colors.dimSeparator}>{displayValue}</text>
-                            </box>
-                          );
-                        })
+                        <box flexDirection="column" gap={1}>
+                          {Object.entries(parsedArgsObj).map(([key, value]) => {
+                            const formattedKey = key.charAt(0).toUpperCase() + key.slice(1);
+                            const isComplex = typeof value === "object" && value !== null;
+                            
+                            return (
+                              <box key={key} flexDirection="column">
+                                <text attributes={TextAttributes.DIM} fg={colors.primary}>
+                                  {formattedKey}:
+                                </text>
+                                {isComplex ? (
+                                  Array.isArray(value) ? (
+                                    <box flexDirection="column" paddingLeft={2}>
+                                      {value.map((item, i) => (
+                                        <box key={i} flexDirection="row" gap={1}>
+                                          <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>•</text>
+                                          <text attributes={TextAttributes.DIM}>
+                                            {typeof item === "object" ? JSON.stringify(item) : String(item)}
+                                          </text>
+                                        </box>
+                                      ))}
+                                    </box>
+                                  ) : (
+                                    <box paddingLeft={2}>
+                                      <text attributes={TextAttributes.DIM}>
+                                        {JSON.stringify(value, null, 2)}
+                                      </text>
+                                    </box>
+                                  )
+                                ) : (
+                                  <box paddingLeft={2}>
+                                    <text attributes={TextAttributes.DIM}>
+                                      {String(value)}
+                                    </text>
+                                  </box>
+                                )}
+                              </box>
+                            );
+                          })}
+                        </box>
                       ) : (
                         <text
-                          fg={colors.dimSeparator}
+                          // fg={colors.dimSeparator}
                           attributes={TextAttributes.DIM}
                         >
                           {String(rawArgs)}
@@ -160,14 +253,15 @@ export const BotMsg = ({
                       )}
 
                       {tc.result && (
-                        <box paddingTop={1} flexDirection="row" gap={1}>
-                          <text fg={colors.success}>Result:</text>
-                          <text fg={colors.dimSeparator}>
-                            {typeof tc.result === "string" &&
-                            tc.result.length > 200
-                              ? tc.result.slice(0, 200) + "..."
-                              : String(tc.result)}
-                          </text>
+                        <box paddingTop={1} flexDirection="column">
+                          <text fg={statusColor} attributes={TextAttributes.DIM}>Result:</text>
+                          <box paddingLeft={2}>
+                            <text fg={colors.dimSeparator} attributes={TextAttributes.DIM}>
+                              {typeof tc.result === "string" && tc.result.length > 500
+                                ? tc.result.slice(0, 500) + "..."
+                                : String(tc.result)}
+                            </text>
+                          </box>
                         </box>
                       )}
                     </box>
@@ -197,7 +291,10 @@ export const BotMsg = ({
               </text>
               {duration && (
                 <>
-                  <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+                  <text
+                    attributes={TextAttributes.DIM}
+                    fg={colors.dimSeparator}
+                  >
                     &gt;
                   </text>
                   <text attributes={TextAttributes.DIM}>
@@ -207,7 +304,10 @@ export const BotMsg = ({
               )}
               {status === "INTERRUPTED" && (
                 <>
-                  <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+                  <text
+                    attributes={TextAttributes.DIM}
+                    fg={colors.dimSeparator}
+                  >
                     &gt;
                   </text>
                   <text attributes={TextAttributes.DIM}>interrupted</text>

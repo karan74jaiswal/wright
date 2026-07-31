@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "../providers/theme";
 import SessionShell from "../components/session-shell";
 import { z } from "zod";
+import { Mode } from "@wright/database/enums";
 import { UserMsg, BotMsg, ErrorMsg } from "../components/messages";
 import { useToast } from "../providers/toast";
 import { useTRPC } from "../lib/api-client";
@@ -30,6 +31,7 @@ interface ChatMessageProps {
   hideFooter?: boolean;
   hideHeader?: boolean;
   groupDuration?: number;
+  allMessages?: SessionData["messages"];
 }
 
 const ChatMessage = memo(function ChatMessage({
@@ -38,8 +40,9 @@ const ChatMessage = memo(function ChatMessage({
   hideFooter,
   hideHeader,
   groupDuration,
+  allMessages,
 }: ChatMessageProps) {
-  if (msg.role === "USER") return <UserMsg message={msg.content} />;
+  if (msg.role === "USER") return <UserMsg message={msg.content} mode={msg.mode as Mode} />;
   if (msg.role === "ERROR") return <ErrorMsg message={msg.content} />;
   if (msg.role === "TOOL") return null;
   if (msg.role === "SYSTEM") return null;
@@ -47,9 +50,26 @@ const ChatMessage = memo(function ChatMessage({
   let parsedToolCalls: Record<string, any> | undefined = undefined;
   if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
     parsedToolCalls = msg.toolCalls.reduce((acc: any, tc: any, i) => {
-      acc[tc.id || String(i)] = { name: tc.name, args: tc.args, result: true };
+      const tcId = tc.id || String(i);
+      let toolMsg = allMessages?.find((m) => m.role === "TOOL" && m.toolCallId === tcId);
+      
+      // Fallback for old history where toolCallId was saved as "unknown"
+      if (!toolMsg) {
+        const myIdx = allMessages?.findIndex((m) => m.id === msg.id) ?? -1;
+        if (myIdx !== -1) {
+          toolMsg = allMessages?.slice(myIdx + 1).find((m) => m.role === "TOOL" && m.toolCallId === "unknown" && !acc._used?.includes(m.id));
+        }
+      }
+
+      acc[tcId] = { name: tc.name, args: tc.args, result: toolMsg ? toolMsg.content : true };
+      if (toolMsg) {
+        acc._used = [...(acc._used || []), toolMsg.id];
+      }
       return acc;
     }, {});
+    if (parsedToolCalls) {
+      delete parsedToolCalls._used;
+    }
   }
 
   let displayContent = msg.content;
@@ -239,6 +259,7 @@ const SessionInner = ({ id }: { id: string }) => {
                 hideFooter={hideFooter}
                 hideHeader={hideHeader}
                 groupDuration={groupDuration}
+                allMessages={arr}
               />
             </box>
           );
