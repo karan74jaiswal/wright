@@ -316,7 +316,11 @@ const SessionInner = ({ id }: { id: string }) => {
             />
           </box>
         ) : null,
-        status === "interrupted" && interruptPayload && interruptPayload.type !== "client_tool" && interruptPayload.type !== "ask_permission" ? (
+        status === "interrupted" && interruptPayload && (
+          Array.isArray(interruptPayload) 
+            ? interruptPayload.some(p => p.value?.type !== "client_tool" && p.value?.type !== "ask_permission")
+            : (interruptPayload.type !== "client_tool" && interruptPayload.type !== "ask_permission")
+        ) ? (
           <box key="interrupt" flexDirection="column" width="100%">
             <InterruptPrompt
               payload={interruptPayload}

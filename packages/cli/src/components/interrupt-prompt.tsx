@@ -15,27 +15,40 @@ export function InterruptPrompt({ payload, onSubmit }: InterruptPromptProps) {
   const { push, pop, isTopLayer } = useKeyboardLayer();
 
   // Normalize the payload into a question and a set of options
-  const { title, description, options } = useMemo(() => {
-    if (payload?.type === "ask_question") {
+  const { title, description, options, activeId } = useMemo(() => {
+    // Extract the active generic payload and its ID
+    let rawPayload = payload;
+    let activeId = "unknown";
+
+    if (Array.isArray(payload)) {
+      const target = payload.find(p => p.value?.type !== "client_tool" && p.value?.type !== "ask_permission") || payload[0];
+      rawPayload = target?.value || target;
+      activeId = target?.id || "unknown";
+    }
+
+    if (rawPayload?.type === "ask_question") {
       // It's an ask_question interrupt
       return {
+        activeId,
         title: "Question from Agent",
-        description: payload.question || "Please select an option:",
-        options: payload.options?.length ? payload.options : ["Continue"],
+        description: rawPayload.question || "Please select an option:",
+        options: rawPayload.options?.length ? rawPayload.options : ["Continue"],
       };
-    } else if (payload?.type === "ask_permission") {
+    } else if (rawPayload?.type === "ask_permission") {
       // It's an ask_permission interrupt
       return {
+        activeId,
         title: "Permission Required",
-        description: `Agent wants to perform an action.\nTarget: ${payload.target || "Unknown"}\nReason: ${payload.reason || "No reason provided"}`,
+        description: `Agent wants to perform an action.\nTarget: ${rawPayload.target || "Unknown"}\nReason: ${rawPayload.reason || "No reason provided"}`,
         options: ["Yes, approve", "No, reject"],
       };
     }
 
     // Fallback for unknown interrupt payloads
     return {
+      activeId,
       title: "Agent Paused",
-      description: typeof payload === "string" ? payload : JSON.stringify(payload, null, 2),
+      description: typeof rawPayload === "string" ? rawPayload : JSON.stringify(rawPayload, null, 2),
       options: ["Continue", "Cancel"],
     };
   }, [payload]);
@@ -63,7 +76,14 @@ export function InterruptPrompt({ payload, onSubmit }: InterruptPromptProps) {
     } else if (key.name === "enter" || key.name === "return") {
       if ((key as any).preventDefault) (key as any).preventDefault();
       if ((key as any).stopPropagation) (key as any).stopPropagation();
-      onSubmit(options[selectedIndex]);
+      
+      const answer = options[selectedIndex];
+      // If we have an activeId, we wrap the answer in a map for LangGraph parallel resumes
+      if (activeId !== "unknown" && Array.isArray(payload)) {
+        onSubmit({ [activeId]: answer } as any);
+      } else {
+        onSubmit(answer);
+      }
     }
   });
 

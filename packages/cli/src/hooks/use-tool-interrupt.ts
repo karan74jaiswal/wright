@@ -15,7 +15,15 @@ export function useToolInterrupt(
   submitInterrupt: (result: any) => void,
   activeCwd: string
 ) {
-  const [pendingApproval, setPendingApproval] = useState<PendingToolApproval | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<{
+    toolName: string;
+    target: string;
+    args: any;
+    isBackendPermissionPrompt: boolean;
+    interruptId: string;
+    resolvedMap: Record<string, any>;
+    remainingPayloads: any[];
+  } | null>(null);
 
   useEffect(() => {
     if (!interruptPayload) {
@@ -23,66 +31,102 @@ export function useToolInterrupt(
       return;
     }
 
-    const processInterrupt = async () => {
-      // 1. Is it a backend generic ask_permission?
-      if (interruptPayload.type === "ask_permission") {
-        const { target } = interruptPayload;
-        // Generic ask_permission has no specific toolName context technically, but we can treat it as a generic "command"
-        const checkResult = PermissionManager.check("ask_permission", target, activeCwd);
-        if (checkResult.allowed) {
-          submitInterrupt("Yes, approve");
-          return;
+    const processInterrupts = async () => {
+      // Stream.ts now yields an array of { id, value }
+      const payloads = Array.isArray(interruptPayload) ? interruptPayload : [{ id: 'single', value: interruptPayload }];
+      
+      // If there are any generic interrupts, bail out and let InterruptPrompt handle them
+      const hasGeneric = payloads.some(p => {
+        const payload = p.value || p;
+        return payload.type !== "client_tool" && payload.type !== "ask_permission";
+      });
+      if (hasGeneric) return;
+
+      const resolvedMap: Record<string, any> = {};
+      
+      let blockedIndex = -1;
+
+      for (let i = 0; i < payloads.length; i++) {
+        const p = payloads[i];
+        const payload = p.value || p;
+        const id = p.id;
+
+        // 1. Is it a backend generic ask_permission?
+        if (payload.type === "ask_permission") {
+          const { target } = payload;
+          const checkResult = PermissionManager.check("ask_permission", target, activeCwd);
+          if (checkResult.allowed) {
+            resolvedMap[id] = "Yes, approve";
+            continue;
+          }
+          
+          setPendingApproval({
+            toolName: "ask_permission",
+            target,
+            args: payload,
+            isBackendPermissionPrompt: true,
+            interruptId: id,
+            resolvedMap,
+            remainingPayloads: payloads.slice(i + 1)
+          });
+          blockedIndex = i;
+          break;
         }
-        
-        setPendingApproval({
-          toolName: "ask_permission",
-          target,
-          args: interruptPayload,
-          isBackendPermissionPrompt: true
-        });
-        return;
+
+        // 2. Is it a client_tool execution?
+        if (payload.type === "client_tool") {
+          const { name, args } = payload;
+          const target = args?.path || args?.command || "";
+
+          const checkResult = PermissionManager.check(name, target, activeCwd);
+          
+          if (checkResult.allowed) {
+            const output = await executeClientTool(name, args, activeCwd);
+            resolvedMap[id] = output;
+          } else {
+            setPendingApproval({
+              toolName: name,
+              target,
+              args,
+              isBackendPermissionPrompt: false,
+              interruptId: id,
+              resolvedMap,
+              remainingPayloads: payloads.slice(i + 1)
+            });
+            blockedIndex = i;
+            break;
+          }
+        }
       }
 
-      // 2. Is it a client_tool execution?
-      if (interruptPayload.type === "client_tool") {
-        const { name, args } = interruptPayload;
-        const target = args?.path || args?.command || "";
-
-        const checkResult = PermissionManager.check(name, target, activeCwd);
-        
-        if (checkResult.allowed) {
-          // Auto-execute and return result
-          const output = await executeClientTool(name, args, activeCwd);
-          submitInterrupt(output);
-        } else {
-          // Pause and ask user
-          setPendingApproval({
-            toolName: name,
-            target,
-            args,
-            isBackendPermissionPrompt: false
-          });
-        }
+      if (blockedIndex === -1) {
+        // All auto-approved!
+        submitInterrupt(resolvedMap);
       }
     };
 
-    processInterrupt();
+    processInterrupts();
   }, [interruptPayload, submitInterrupt, activeCwd]);
 
   const resolveApproval = async (decision: "allow_once" | "allow_session" | "allow_system" | "deny", wildcardTarget?: string) => {
     if (!pendingApproval) return;
     
-    const { toolName, target, args, isBackendPermissionPrompt } = pendingApproval;
+    const { toolName, target, args, isBackendPermissionPrompt, interruptId, resolvedMap, remainingPayloads } = pendingApproval;
     const finalTarget = wildcardTarget || target;
 
     // Handle Deny
     if (decision === "deny") {
       setPendingApproval(null);
-      if (isBackendPermissionPrompt) {
-        submitInterrupt("No, reject");
-      } else {
-        submitInterrupt("__CANCELLED__");
+      
+      const denyResult = isBackendPermissionPrompt ? "No, reject" : "__CANCELLED__";
+      const newResolvedMap = { ...resolvedMap, [interruptId]: denyResult };
+      
+      // Auto-deny the rest since the user aborted this chain
+      for (const p of remainingPayloads) {
+        newResolvedMap[p.id] = p.value?.type === "ask_permission" ? "No, reject" : "__CANCELLED__";
       }
+      
+      submitInterrupt(newResolvedMap);
       return;
     }
 
@@ -95,12 +139,80 @@ export function useToolInterrupt(
 
     setPendingApproval(null);
 
-    // Execute or Approve
+    // Execute the blocked one
+    const newResolvedMap = { ...resolvedMap };
     if (isBackendPermissionPrompt) {
-      submitInterrupt("Yes, approve");
+      newResolvedMap[interruptId] = "Yes, approve";
     } else {
       const output = await executeClientTool(toolName, args, activeCwd);
-      submitInterrupt(output);
+      newResolvedMap[interruptId] = output;
+    }
+
+    // Now execute the rest (we auto-grant them if they are covered, else wait... wait! 
+    // To keep it simple, we just pass the rest back to the loop by updating interruptPayload.
+    // BUT we don't have access to setInterruptPayload here! 
+    // It's fine, we can just execute them here in a loop.)
+    
+    let nextBlocked: any = null;
+    for (let i = 0; i < remainingPayloads.length; i++) {
+      const p = remainingPayloads[i];
+      const payload = p.value || p;
+      const id = p.id;
+
+      if (payload.type === "ask_permission") {
+        const checkResult = PermissionManager.check("ask_permission", payload.target, activeCwd);
+        if (checkResult.allowed) {
+          newResolvedMap[id] = "Yes, approve";
+        } else {
+          setPendingApproval({
+            toolName: "ask_permission",
+            target: payload.target,
+            args: payload,
+            isBackendPermissionPrompt: true,
+            interruptId: id,
+            resolvedMap: newResolvedMap,
+            remainingPayloads: remainingPayloads.slice(i + 1)
+          });
+          nextBlocked = true;
+          break;
+        }
+      } else if (payload.type === "client_tool") {
+        const target = payload.args?.path || payload.args?.command || "";
+        const checkResult = PermissionManager.check(payload.name, target, activeCwd);
+        if (checkResult.allowed) {
+          const output = await executeClientTool(payload.name, payload.args, activeCwd);
+          newResolvedMap[id] = output;
+        } else {
+          setPendingApproval({
+            toolName: payload.name,
+            target,
+            args: payload.args,
+            isBackendPermissionPrompt: false,
+            interruptId: id,
+            resolvedMap: newResolvedMap,
+            remainingPayloads: remainingPayloads.slice(i + 1)
+          });
+          nextBlocked = true;
+          break;
+        }
+      } else {
+        // Fallback for unhandled types like ask_question in the remaining chain
+        setPendingApproval({
+          toolName: payload.type,
+          target: payload.type,
+          args: payload,
+          isBackendPermissionPrompt: false,
+          interruptId: id,
+          resolvedMap: newResolvedMap,
+          remainingPayloads: remainingPayloads.slice(i + 1)
+        });
+        nextBlocked = true;
+        break;
+      }
+    }
+
+    if (!nextBlocked) {
+      submitInterrupt(newResolvedMap);
     }
   };
 

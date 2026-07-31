@@ -40,15 +40,19 @@ export function useChat({
   const toast = useToast();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { currentMode, currentModel, reasoningEffort, providerApiKeys } = usePromptConfig();
+  const { currentMode, currentModel, reasoningEffort, providerApiKeys } =
+    usePromptConfig();
 
   // Data State
   const [history, setHistory] = useState<Message[]>(initialMessages);
   const [streamedContent, setStreamedContent] = useState("");
+  const streamedContentRef = useRef(streamedContent);
   const [streamedReasoning, setStreamedReasoning] = useState("");
+  const streamedReasoningRef = useRef(streamedReasoning);
   const [activeToolCalls, setActiveToolCalls] = useState<
     Record<string, { name: string; args: string; result?: any }>
   >({});
+  const activeToolCallsRef = useRef(activeToolCalls);
   const [interruptPayload, setInterruptPayload] = useState<any | null>(null);
 
   // UI State
@@ -67,15 +71,37 @@ export function useChat({
     trpc.chat.cancelChat.mutationOptions(),
   );
 
+  // Keep refs in sync
+  useEffect(() => {
+    streamedContentRef.current = streamedContent;
+  }, [streamedContent]);
+
+  useEffect(() => {
+    streamedReasoningRef.current = streamedReasoning;
+  }, [streamedReasoning]);
+
+  useEffect(() => {
+    activeToolCallsRef.current = activeToolCalls;
+  }, [activeToolCalls]);
+
   // Sync incoming database history
   useEffect(() => {
     setHistory((prevHistory) => {
       // Create a map of DB messages by ID
       const dbMessageIds = new Set(initialMessages.map((m) => m.id));
-      
-      // Keep any optimistic messages (start with temp-) that haven't been saved to DB yet
+      const dbMessageContents = new Set(
+        initialMessages.map((m) => m.content.trim()),
+      );
+
+      // Keep any optimistic user messages (e.g. temp-user-) that haven't been saved to DB yet.
+      // We aggressively purge temp-ai-interrupt- messages because initialMessages only updates
+      // after the run is fully done and the DB has the canonical messages.
       const optimisticMessages = prevHistory.filter(
-        (m) => m.id.startsWith("temp-") && !dbMessageIds.has(m.id)
+        (m) =>
+          m.id.startsWith("temp-") &&
+          !m.id.startsWith("temp-ai-interrupt-") &&
+          !dbMessageIds.has(m.id) &&
+          !dbMessageContents.has(m.content.trim()),
       );
 
       // Merge DB messages with remaining optimistic messages
@@ -126,13 +152,20 @@ export function useChat({
           } else if (event.type === "reasoning-delta") {
             setStreamedReasoning((prev) => prev + event.text);
           } else if (event.type === "tool-call") {
-            setActiveToolCalls((prev) => ({
-              ...prev,
-              [event.toolCallId]: {
-                name: event.toolName,
-                args: (prev[event.toolCallId]?.args || "") + event.args,
-              },
-            }));
+            setActiveToolCalls((prev) => {
+              const existingName = prev[event.toolCallId]?.name;
+              const newName =
+                event.toolName !== "unknown"
+                  ? event.toolName
+                  : existingName || "unknown";
+              return {
+                ...prev,
+                [event.toolCallId]: {
+                  name: newName,
+                  args: (prev[event.toolCallId]?.args || "") + event.args,
+                },
+              };
+            });
           } else if (event.type === "tool-result") {
             setActiveToolCalls((prev) => ({
               ...prev,
@@ -144,6 +177,33 @@ export function useChat({
           } else if (event.type === "interrupt") {
             setInterruptPayload(event.payload);
             setStatus("interrupted");
+
+            // Step 1: Snapshot streaming state to optimistic history
+            setHistory((prev) => {
+              const toolCallsObj = activeToolCallsRef.current;
+              const hasToolCalls = Object.keys(toolCallsObj).length > 0;
+              const optimisticMsg: Message = {
+                id: `temp-ai-interrupt-${Date.now()}`,
+                sessionId,
+                role: "ASSISTANT",
+                content: streamedContentRef.current,
+                reasoning: streamedReasoningRef.current || null,
+                reasoningEffort,
+                reasoningDuration: 0,
+                duration: 0,
+                status: "COMPLETED",
+                model: currentModel,
+                mode: currentMode,
+                toolCalls: hasToolCalls ? toolCallsObj : null,
+                toolCallId: null,
+                createdAt: new Date(),
+              };
+              return [...prev, optimisticMsg];
+            });
+
+            setActiveToolCalls({}); // Clear synchronously so next stream starts fresh
+            setStreamedContent("");
+            setStreamedReasoning("");
           } else if (event.type === "done") {
             queryClient
               .invalidateQueries(
@@ -220,20 +280,82 @@ export function useChat({
       setHistory((prev) => [...prev, optimisticMsg]);
       setStatus("streaming");
       hasAutoResumedRef.current = true; // Prevent any auto-resume collisions
-      setActiveRequest({ message: text, activeCwd: process.cwd(), isAutoResume: false, timestamp: Date.now() });
+      setActiveRequest({
+        message: text,
+        activeCwd: process.cwd(),
+        isAutoResume: false,
+        timestamp: Date.now(),
+      });
     },
     [sessionId, status, currentModel, currentMode],
   );
 
   const submitInterrupt = useCallback(
-    (answer: string) => {
+    (answerMap: Record<string, any> | any) => {
       if (status !== "interrupted") return;
+
+      // Ensure answer is formatted as a Record mapping interrupt ID to answer.
+      // If we only have a primitive value (e.g., from an older integration), fallback to treating it as a single payload.
+      let resumePayload = answerMap;
+      if (
+        interruptPayload &&
+        Array.isArray(interruptPayload) &&
+        interruptPayload.length === 1 &&
+        (typeof answerMap === "string" ||
+          typeof answerMap === "number" ||
+          typeof answerMap === "boolean")
+      ) {
+        resumePayload = { [interruptPayload[0].id]: answerMap };
+      }
+
+      // Optimistically update the tool call result in the history
+      setHistory((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (
+          lastMsg &&
+          lastMsg.id.startsWith("temp-ai-interrupt-") &&
+          lastMsg.toolCalls
+        ) {
+          const updatedToolCalls: Record<string, any> = {
+            ...(lastMsg.toolCalls as Record<string, any>),
+          };
+          let changed = false;
+
+          for (const [tcId, tcData] of Object.entries(updatedToolCalls)) {
+            // Find if this tool call ID matches any key in our resumePayload
+            // (Assuming tcId maps to the interrupt ID, or if there's only 1 we just apply it)
+            if (resumePayload[tcId] !== undefined) {
+              updatedToolCalls[tcId] = {
+                ...(tcData as any),
+                result: resumePayload[tcId],
+              };
+              changed = true;
+            } else if (Object.keys(resumePayload).length === 1) {
+              // Fallback: if there's only 1 tool call and 1 payload, assume they match
+              const singleKey = Object.keys(resumePayload)[0];
+              updatedToolCalls[tcId] = {
+                ...(tcData as any),
+                result: resumePayload[singleKey!],
+              };
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            return [
+              ...prev.slice(0, -1),
+              { ...lastMsg, toolCalls: updatedToolCalls },
+            ];
+          }
+        }
+        return prev;
+      });
 
       setInterruptPayload(null);
       setStatus("streaming");
-      setActiveRequest({ resume: answer, timestamp: Date.now() });
+      setActiveRequest({ resume: resumePayload, timestamp: Date.now() });
     },
-    [status],
+    [status, interruptPayload],
   );
 
   const stop = useCallback(() => {

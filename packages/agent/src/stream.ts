@@ -126,6 +126,12 @@ export async function* streamAgent(
             block.fields?.type === "tool_call_chunk")
         ) {
           const tc = block.type === "tool-call-delta" ? block : block.fields;
+          
+          // Ignore completely empty tool call chunks which some models emit when transitioning blocks
+          if (!tc.id && tc.index === undefined && !tc.name && !tc.args) {
+            continue;
+          }
+
           yield {
             type: "tool-call",
             toolCallId: tc.id || tc.index?.toString() || "unknown",
@@ -238,14 +244,12 @@ export async function* streamAgent(
     );
 
     if (interruptedTask) {
-      const interrupts = interruptedTask.interrupts;
-      if (interrupts && interrupts.length > 0) {
-        const payload = interrupts[0]?.value;
-        if (payload !== undefined) {
-          yield { type: "interrupt", payload } as ChatStreamEvent;
+        const interrupts = interruptedTask.interrupts;
+        if (interrupts && interrupts.length > 0) {
+          const payloads = interrupts.map((i) => ({ id: i.id, value: i.value }));
+          yield { type: "interrupt", payload: payloads } as ChatStreamEvent;
           return;
         }
-      }
     }
 
     yield { type: "done" } as ChatStreamEvent;
@@ -270,11 +274,9 @@ export async function* streamAgent(
       if (interruptedTask) {
         const interrupts = interruptedTask.interrupts;
         if (interrupts && interrupts.length > 0) {
-          const payload = interrupts[0]?.value;
-          if (payload !== undefined) {
-            yield { type: "interrupt", payload } as ChatStreamEvent;
-            return;
-          }
+          const payloads = interrupts.map((i) => ({ id: i.id, value: i.value }));
+          yield { type: "interrupt", payload: payloads } as ChatStreamEvent;
+          return;
         }
       }
       return; // It interrupted but we couldn't find the payload, just gracefully stop.

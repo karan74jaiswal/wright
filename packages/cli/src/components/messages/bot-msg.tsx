@@ -137,21 +137,27 @@ export const BotMsg = ({
           </box>
         ) : null}
 
-        {toolCalls && Object.values(toolCalls).length > 0 ? (
-          <box
-            border={["left"]}
-            borderColor={colors.thinkingBorder}
-            customBorderChars={{
-              ...EmptyBorder,
-              vertical: "│",
-            }}
-            paddingX={2}
-            width="100%"
-            paddingTop={content ? 1 : 0}
-            // paddingBottom={1}
-            flexDirection="column"
-          >
-            {Object.values(toolCalls).map((tc, idx) => {
+        {(() => {
+          const validToolCalls = toolCalls
+            ? Object.values(toolCalls).filter((tc) => tc.name && tc.name.toLowerCase() !== "unknown")
+            : [];
+          if (validToolCalls.length === 0) return null;
+
+          return (
+            <box
+              border={["left"]}
+              borderColor={colors.thinkingBorder}
+              customBorderChars={{
+                ...EmptyBorder,
+                vertical: "│",
+              }}
+              paddingX={2}
+              width="100%"
+              paddingTop={content ? 1 : 0}
+              flexDirection="column"
+            >
+              {validToolCalls.map((tc, idx) => {
+
               let parsedArgsObj: Record<string, any> | null = null;
               let rawArgs = tc.args;
               try {
@@ -252,7 +258,7 @@ export const BotMsg = ({
                         </text>
                       )}
 
-                      {tc.result && (
+                      {tc.result ? (
                         <box paddingTop={1} flexDirection="column">
                           <text fg={statusColor} attributes={TextAttributes.DIM}>Result:</text>
                           <box paddingLeft={2}>
@@ -263,14 +269,15 @@ export const BotMsg = ({
                             </text>
                           </box>
                         </box>
-                      )}
+                      ) : null}
                     </box>
                   )}
                 </box>
               );
-            })}
-          </box>
-        ) : null}
+              })}
+            </box>
+          );
+        })()}
       </box>
       {!hideFooter && (
         <box paddingX={3} paddingBottom={1} gap={1} width="100%">
@@ -289,7 +296,7 @@ export const BotMsg = ({
                   ? ` (${formattedEffort})`
                   : ""}
               </text>
-              {duration && (
+              {duration ? (
                 <>
                   <text
                     attributes={TextAttributes.DIM}
@@ -301,7 +308,7 @@ export const BotMsg = ({
                     {prettyMilliseconds(duration)}
                   </text>
                 </>
-              )}
+              ) : null}
               {status === "INTERRUPTED" && (
                 <>
                   <text
