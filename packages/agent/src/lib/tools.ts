@@ -14,7 +14,7 @@ export const readFileTool = tool(
       args: { path }
     });
     const resStr = String(result);
-    if (resStr === "Cancel") throw new Error(`User denied permission for read_file(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for read_file(${path})`);
     return resStr;
   },
   {
@@ -34,7 +34,7 @@ export const writeFileTool = tool(
       args: { path, content }
     });
     const resStr = String(result);
-    if (resStr === "Cancel") throw new Error(`User denied permission for write_file(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for write_file(${path})`);
     return resStr;
   },
   {
@@ -55,7 +55,7 @@ export const runCommandTool = tool(
       args: { command }
     });
     const resStr = String(result);
-    if (resStr === "Cancel") throw new Error(`User denied permission for run_command(${command})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for run_command(${command})`);
     return resStr;
   },
   {
@@ -75,7 +75,7 @@ export const listDirectoryTool = tool(
       args: { path }
     });
     const resStr = String(result);
-    if (resStr === "Cancel") throw new Error(`User denied permission for list_directory(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for list_directory(${path})`);
     return resStr;
   },
   {

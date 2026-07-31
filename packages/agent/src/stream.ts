@@ -259,6 +259,27 @@ export async function* streamAgent(
     }
 
     const errorMsg = err instanceof Error ? err.message : String(err);
+    
+    // In LangGraph 0.2, calling interrupt() throws GraphInterrupt which propagates through streamEvents.
+    if (errorMsg.includes("GraphInterrupt") || (err as any)?.name === "GraphInterrupt") {
+      const finalState = await graph!.getState(config!);
+      const interruptedTask = finalState.tasks?.find(
+        (t) => t.interrupts && t.interrupts.length > 0,
+      );
+
+      if (interruptedTask) {
+        const interrupts = interruptedTask.interrupts;
+        if (interrupts && interrupts.length > 0) {
+          const payload = interrupts[0]?.value;
+          if (payload !== undefined) {
+            yield { type: "interrupt", payload } as ChatStreamEvent;
+            return;
+          }
+        }
+      }
+      return; // It interrupted but we couldn't find the payload, just gracefully stop.
+    }
+
     console.error("Agent Error:", err);
 
     try {

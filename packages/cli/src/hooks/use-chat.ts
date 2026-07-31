@@ -58,6 +58,7 @@ export function useChat({
     resume?: any;
     activeCwd?: string;
     isAutoResume?: boolean;
+    timestamp?: number;
   } | null>(null);
 
   const hasAutoResumedRef = useRef(false);
@@ -66,9 +67,20 @@ export function useChat({
     trpc.chat.cancelChat.mutationOptions(),
   );
 
-  // Sync incoming database history (e.g. from invalidations)
+  // Sync incoming database history
   useEffect(() => {
-    setHistory(initialMessages);
+    setHistory((prevHistory) => {
+      // Create a map of DB messages by ID
+      const dbMessageIds = new Set(initialMessages.map((m) => m.id));
+      
+      // Keep any optimistic messages (start with temp-) that haven't been saved to DB yet
+      const optimisticMessages = prevHistory.filter(
+        (m) => m.id.startsWith("temp-") && !dbMessageIds.has(m.id)
+      );
+
+      // Merge DB messages with remaining optimistic messages
+      return [...initialMessages, ...optimisticMessages];
+    });
   }, [initialMessages]);
 
   useEffect(() => {
@@ -208,7 +220,7 @@ export function useChat({
       setHistory((prev) => [...prev, optimisticMsg]);
       setStatus("streaming");
       hasAutoResumedRef.current = true; // Prevent any auto-resume collisions
-      setActiveRequest({ message: text, activeCwd: process.cwd(), isAutoResume: false });
+      setActiveRequest({ message: text, activeCwd: process.cwd(), isAutoResume: false, timestamp: Date.now() });
     },
     [sessionId, status, currentModel, currentMode],
   );
@@ -219,7 +231,7 @@ export function useChat({
 
       setInterruptPayload(null);
       setStatus("streaming");
-      setActiveRequest({ resume: answer });
+      setActiveRequest({ resume: answer, timestamp: Date.now() });
     },
     [status],
   );

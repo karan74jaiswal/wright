@@ -10,6 +10,8 @@ import { useToast } from "../providers/toast";
 import { useTRPC } from "../lib/api-client";
 import { ToastVariant } from "../providers/toast/types";
 import { useChat } from "../hooks/use-chat";
+import { useToolInterrupt } from "../hooks/use-tool-interrupt";
+import { ToolApprovalPrompt } from "../components/tool-approval-prompt";
 import { InterruptPrompt } from "../components/interrupt-prompt";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
@@ -48,27 +50,41 @@ const ChatMessage = memo(function ChatMessage({
   if (msg.role === "SYSTEM") return null;
 
   let parsedToolCalls: Record<string, any> | undefined = undefined;
-  if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
-    parsedToolCalls = msg.toolCalls.reduce((acc: any, tc: any, i) => {
-      const tcId = tc.id || String(i);
-      let toolMsg = allMessages?.find((m) => m.role === "TOOL" && m.toolCallId === tcId);
-      
-      // Fallback for old history where toolCallId was saved as "unknown"
-      if (!toolMsg) {
-        const myIdx = allMessages?.findIndex((m) => m.id === msg.id) ?? -1;
-        if (myIdx !== -1) {
-          toolMsg = allMessages?.slice(myIdx + 1).find((m) => m.role === "TOOL" && m.toolCallId === "unknown" && !acc._used?.includes(m.id));
+  if (msg.toolCalls) {
+    let rawToolCalls = msg.toolCalls;
+    if (typeof rawToolCalls === "string") {
+      try {
+        rawToolCalls = JSON.parse(rawToolCalls);
+      } catch (e) {
+        rawToolCalls = [];
+      }
+    }
+    
+    if (Array.isArray(rawToolCalls)) {
+      parsedToolCalls = rawToolCalls.reduce((acc: any, tc: any, i: number) => {
+        const tcId = tc.id || String(i);
+        let toolMsg = allMessages?.find((m) => m.role === "TOOL" && m.toolCallId === tcId);
+        
+        // Fallback for old history where toolCallId was saved as "unknown"
+        if (!toolMsg) {
+          const myIdx = allMessages?.findIndex((m) => m.id === msg.id) ?? -1;
+          if (myIdx !== -1) {
+            toolMsg = allMessages?.slice(myIdx + 1).find((m) => m.role === "TOOL" && m.toolCallId === "unknown" && !acc._used?.includes(m.id));
+          }
         }
-      }
 
-      acc[tcId] = { name: tc.name, args: tc.args, result: toolMsg ? toolMsg.content : true };
-      if (toolMsg) {
-        acc._used = [...(acc._used || []), toolMsg.id];
+        acc[tcId] = { name: tc.name, args: tc.args, result: toolMsg ? toolMsg.content : true };
+        if (toolMsg) {
+          acc._used = [...(acc._used || []), toolMsg.id];
+        }
+        return acc;
+      }, {});
+      if (parsedToolCalls) {
+        delete parsedToolCalls._used;
       }
-      return acc;
-    }, {});
-    if (parsedToolCalls) {
-      delete parsedToolCalls._used;
+    } else if (typeof rawToolCalls === "object" && rawToolCalls !== null) {
+      // It might already be a Record<string, any> from optimistic updates
+      parsedToolCalls = rawToolCalls as Record<string, any>;
     }
   }
 
@@ -176,6 +192,12 @@ const SessionInner = ({ id }: { id: string }) => {
     initialMessages,
   });
 
+  const { pendingApproval, resolveApproval } = useToolInterrupt(
+    interruptPayload,
+    submitInterrupt,
+    session?.cwd || process.cwd()
+  );
+
   const lastVisibleMsg = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i--) {
       const msg = history[i];
@@ -222,13 +244,19 @@ const SessionInner = ({ id }: { id: string }) => {
             }
           }
 
-          const isPrevAi = prevVisibleMsg?.role === "ASSISTANT";
+          const hasToolCalls = msg.toolCalls && (
+            (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) ||
+            (typeof msg.toolCalls === 'string' && msg.toolCalls.length > 5) || 
+            (typeof msg.toolCalls === 'object' && Object.keys(msg.toolCalls).length > 0)
+          );
+          
+          const hideHeader = !hasToolCalls && prevVisibleMsg?.role === "ASSISTANT" && msg.role === "ASSISTANT";
+
           const isNextAi =
             nextVisibleMsg?.role === "ASSISTANT" ||
             (!nextVisibleMsg && isStreamingAiPresent);
 
           const hideFooter = isNextAi && msg.role === "ASSISTANT";
-          const hideHeader = isPrevAi && msg.role === "ASSISTANT";
 
           // Calculate total duration for the grouped block
           let groupDuration = msg.duration || 0;
@@ -288,11 +316,19 @@ const SessionInner = ({ id }: { id: string }) => {
             />
           </box>
         ) : null,
-        status === "interrupted" && interruptPayload ? (
+        status === "interrupted" && interruptPayload && interruptPayload.type !== "client_tool" && interruptPayload.type !== "ask_permission" ? (
           <box key="interrupt" flexDirection="column" width="100%">
             <InterruptPrompt
               payload={interruptPayload}
               onSubmit={submitInterrupt}
+            />
+          </box>
+        ) : null,
+        pendingApproval ? (
+          <box key="tool_approval" flexDirection="column" width="100%">
+            <ToolApprovalPrompt
+              pendingApproval={pendingApproval}
+              onResolve={resolveApproval}
             />
           </box>
         ) : null,
