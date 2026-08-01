@@ -22,7 +22,11 @@ export function getCheckpointer() {
 export function setupCheckpointer(): Promise<void> {
   if (!setupPromise) {
     const cp = getCheckpointer();
-    setupPromise = cp.setup();
+    setupPromise = cp.setup().catch((err) => {
+      // Reset so the next call retries instead of permanently caching a rejected promise
+      setupPromise = null;
+      throw err;
+    });
   }
   return setupPromise;
 }

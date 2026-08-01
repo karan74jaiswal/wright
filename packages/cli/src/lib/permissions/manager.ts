@@ -1,6 +1,6 @@
 import type { PermissionRule, PermissionScope, PermissionCheckResult } from "./types";
 import { matchRule } from "./matcher";
-import * as fs from "fs";
+import * as fs from "node:fs/promises";
 import * as path from "path";
 import * as os from "os";
 
@@ -11,32 +11,30 @@ export class PermissionManager {
     return path.join(os.homedir(), ".wright", "permissions.json");
   }
 
-  private static loadSystemRules(): PermissionRule[] {
+  private static async loadSystemRules(): Promise<PermissionRule[]> {
     try {
-      if (fs.existsSync(this.systemConfigPath)) {
-        const data = fs.readFileSync(this.systemConfigPath, "utf-8");
-        const parsed = JSON.parse(data);
-        return Array.isArray(parsed) ? parsed : [];
+      const data = await fs.readFile(this.systemConfigPath, "utf-8");
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e: any) {
+      if (e?.code !== 'ENOENT') {
+        console.error("Failed to load system permissions", e);
       }
-    } catch (e) {
-      console.error("Failed to load system permissions", e);
+      return [];
     }
-    return [];
   }
 
-  private static saveSystemRules(rules: PermissionRule[]) {
+  private static async saveSystemRules(rules: PermissionRule[]) {
     try {
       const dir = path.dirname(this.systemConfigPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.systemConfigPath, JSON.stringify(rules, null, 2), "utf-8");
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(this.systemConfigPath, JSON.stringify(rules, null, 2), "utf-8");
     } catch (e) {
       console.error("Failed to save system permissions", e);
     }
   }
 
-  public static grant(toolName: string, targetPattern: string, scope: PermissionScope) {
+  public static async grant(toolName: string, targetPattern: string, scope: PermissionScope) {
     const rule: PermissionRule = {
       toolName,
       targetPattern,
@@ -47,23 +45,23 @@ export class PermissionManager {
     if (scope === "session") {
       this.sessionRules.push(rule);
     } else if (scope === "system") {
-      const sysRules = this.loadSystemRules();
+      const sysRules = await this.loadSystemRules();
       sysRules.push(rule);
-      this.saveSystemRules(sysRules);
+      await this.saveSystemRules(sysRules);
     }
   }
 
   /**
    * Checks if a specific tool and target are allowed.
    */
-  public static check(toolName: string, target: string, activeCwd: string): PermissionCheckResult {
+  public static async check(toolName: string, target: string, activeCwd: string): Promise<PermissionCheckResult> {
     // 1. Safe auto-grant for read operations inside the workspace
     if ((toolName === "read_file" || toolName === "list_directory") && target) {
       // Very basic sanity check: if the path resolves inside activeCwd
       // This allows the agent to read freely without annoying the user
-      const resolvedTarget = path.resolve(target);
+      const resolvedTarget = path.resolve(activeCwd, target);
       const resolvedActive = path.resolve(activeCwd);
-      if (resolvedTarget.startsWith(resolvedActive)) {
+      if (resolvedTarget.startsWith(resolvedActive + path.sep) || resolvedTarget === resolvedActive) {
         return { allowed: true }; // Auto-granted
       }
     }
@@ -76,7 +74,7 @@ export class PermissionManager {
     }
 
     // 3. Check System Rules
-    const sysRules = this.loadSystemRules();
+    const sysRules = await this.loadSystemRules();
     for (const rule of sysRules) {
       if (rule.toolName === toolName && matchRule(rule.targetPattern, target)) {
         return { allowed: true, rule };

@@ -91,11 +91,15 @@ You are an expert autonomous developer authorized to execute changes. Follow the
 4. SAFE COMMAND EXECUTION: 
    - NEVER run interactive commands that block indefinitely (e.g., \`vim\`, \`tail -f\`, or starting a server without backgrounding it).
    - Always use non-interactive flags (e.g., \`apt-get -y\`, \`npm install --no-audit\`).
-5. SURGICAL EDITS (BUILD MODE ONLY): 
-   - Note: If you are in PLAN mode, editing is STRICTLY FORBIDDEN.
-   - Prefer precise line-based or diff-based editing tools for existing files. 
-   - Only overwrite an entire file if you are creating it from scratch or rewriting >50% of its contents.
-   - When using diffs or search-and-replace, ensure your search blocks EXACTLY match the target file (including whitespace and indentation) to avoid silent failures.`);
+ 5. SURGICAL EDITS (BUILD MODE ONLY): 
+    - Note: If you are in PLAN mode, editing is STRICTLY FORBIDDEN.
+    - Prefer precise line-based or diff-based editing tools for existing files. 
+    - Only overwrite an entire file if you are creating it from scratch or rewriting >50% of its contents.
+    - When using diffs or search-and-replace, ensure your search blocks EXACTLY match the target file (including whitespace and indentation) to avoid silent failures.
+ 6. STRICT PATH & FILE SYSTEM RULES:
+    - ABSOLUTE PATHS ONLY: Always construct and pass full, absolute paths to file system tools (e.g., \`/Users/kartikey/Desktop/wright/package.json\` NOT \`package.json\`).
+    - TOOL SPECIFICITY: You MUST strictly distinguish between files and directories. NEVER call \`list_directory\` on a file. NEVER call \`read_file\` on a directory.
+ `);
 
   return new SystemMessage(parts.join("\n"));
 }

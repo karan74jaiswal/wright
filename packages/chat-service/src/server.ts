@@ -3,7 +3,11 @@ import http from "node:http";
 import express from "express";
 import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
+import * as Sentry from "@sentry/bun";
 import { appRouter } from "./index";
+import { abortAllStreams } from "./router";
+import { prisma as db } from "@wright/database/client";
+import { setupCheckpointer } from "@wright/agent";
 
 const app = express();
 const port = Number(process.env.CHAT_SERVICE_PORT) || 3002;
@@ -24,6 +28,13 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
+    onError({ error, path }) {
+      if (error.code === "INTERNAL_SERVER_ERROR") {
+        Sentry.captureException(error, {
+          tags: { path: `/api/${path}` },
+        });
+      }
+    },
   }),
 );
 
@@ -40,17 +51,30 @@ const server = http.createServer(app);
 // 10 minutes allows long AI responses without enabling Slowloris attacks.
 server.setTimeout(10 * 60 * 1000);
 
-server.listen(port, () => {
-  console.log(`Chat service listening on port ${port}`);
-});
+// Initialize checkpointer tables once at boot, then start accepting connections
+setupCheckpointer()
+  .then(() => {
+    server.listen(port, () => {
+      console.log(`Chat service listening on port ${port}`);
+    });
+  })
+  .catch((err: unknown) => {
+    console.error("Failed to initialize checkpointer:", err);
+    process.exit(1);
+  });
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log("Chat service shutting down gracefully...");
+  abortAllStreams();
   server.close(() => {
     console.log("Chat service stopped.");
-    process.exit(0);
   });
+  try {
+    await db.$disconnect();
+  } catch (e) {
+    console.error("Failed to disconnect database:", e);
+  }
   // Force exit after 10 seconds if connections don't drain
   setTimeout(() => process.exit(1), 10_000).unref();
 };

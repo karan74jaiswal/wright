@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
+import { prisma as db } from "@wright/database/client";
 
 import { appRouter } from "./index";
 
@@ -26,6 +27,13 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
+    onError({ error, path }) {
+      if (error.code === "INTERNAL_SERVER_ERROR") {
+        Sentry.captureException(error, {
+          tags: { path: `/api/${path}` },
+        });
+      }
+    },
   }),
 );
 
@@ -37,8 +45,6 @@ app.get("/", (_req, res) => {
   res.send("Session service is running");
 });
 
-// Sentry error handler should be after all controllers/middlewares
-Sentry.setupExpressErrorHandler(app);
 
 const server = http.createServer(app);
 
@@ -47,12 +53,16 @@ server.listen(port, () => {
 });
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log("Session service shutting down gracefully...");
   server.close(() => {
     console.log("Session service stopped.");
-    process.exit(0);
   });
+  try {
+    await db.$disconnect();
+  } catch (e) {
+    console.error("Failed to disconnect database:", e);
+  }
   setTimeout(() => process.exit(1), 10_000).unref();
 };
 

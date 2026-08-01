@@ -6,10 +6,10 @@
       "name": "flow-agent",
       "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "eslint": "^10.6.0",
+        "eslint": "^10.8.0",
         "eslint-plugin-react-hooks": "^7.1.1",
-        "globals": "^17.7.0",
-        "typescript-eslint": "^8.62.1",
+        "globals": "^17.8.0",
+        "typescript-eslint": "^8.65.0",
       },
     },
     "packages/agent": {
@@ -110,6 +110,7 @@
       "dependencies": {
         "@prisma/adapter-pg": "^7.8.0",
         "@prisma/client": "^7.8.0",
+        "@wright/shared": "workspace:*",
         "pg": "^8.16.0",
       },
       "devDependencies": {
@@ -142,6 +143,7 @@
       "name": "@wright/shared",
       "dependencies": {
         "@trpc/server": "^11.18.0",
+        "dotenv": "^17.4.2",
         "superjson": "^2.2.2",
         "zod": "^4.4.3",
       },

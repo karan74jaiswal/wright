@@ -1,8 +1,7 @@
+import { loadEnv } from "@wright/shared";
 import * as Sentry from "@sentry/bun";
-import dotenv from "dotenv";
-import path from "node:path";
 
-dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+loadEnv(import.meta.dirname);
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,

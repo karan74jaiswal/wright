@@ -54,7 +54,7 @@ export function useToolInterrupt(
         // 1. Is it a backend generic ask_permission?
         if (payload.type === "ask_permission") {
           const { target } = payload;
-          const checkResult = PermissionManager.check("ask_permission", target, activeCwd);
+          const checkResult = await PermissionManager.check("ask_permission", target, activeCwd);
           if (checkResult.allowed) {
             resolvedMap[id] = "Yes, approve";
             continue;
@@ -78,7 +78,7 @@ export function useToolInterrupt(
           const { name, args } = payload;
           const target = args?.path || args?.command || "";
 
-          const checkResult = PermissionManager.check(name, target, activeCwd);
+          const checkResult = await PermissionManager.check(name, target, activeCwd);
           
           if (checkResult.allowed) {
             const output = await executeClientTool(name, args, activeCwd);
@@ -105,7 +105,16 @@ export function useToolInterrupt(
       }
     };
 
-    processInterrupts();
+    processInterrupts().catch((err) => {
+      console.error("Tool interrupt processing error:", err);
+      // Submit an error result so the stream doesn't hang
+      const payloads = Array.isArray(interruptPayload) ? interruptPayload : [{ id: 'single', value: interruptPayload }];
+      const errorMap: Record<string, any> = {};
+      for (const p of payloads) {
+        errorMap[p.id] = `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
+      submitInterrupt(errorMap);
+    });
   }, [interruptPayload, submitInterrupt, activeCwd]);
 
   const resolveApproval = async (decision: "allow_once" | "allow_session" | "allow_system" | "deny", wildcardTarget?: string) => {
@@ -132,9 +141,9 @@ export function useToolInterrupt(
 
     // Handle Grant
     if (decision === "allow_session") {
-      PermissionManager.grant(toolName, finalTarget, "session");
+      await PermissionManager.grant(toolName, finalTarget, "session");
     } else if (decision === "allow_system") {
-      PermissionManager.grant(toolName, finalTarget, "system");
+      await PermissionManager.grant(toolName, finalTarget, "system");
     }
 
     setPendingApproval(null);
@@ -160,7 +169,7 @@ export function useToolInterrupt(
       const id = p.id;
 
       if (payload.type === "ask_permission") {
-        const checkResult = PermissionManager.check("ask_permission", payload.target, activeCwd);
+        const checkResult = await PermissionManager.check("ask_permission", payload.target, activeCwd);
         if (checkResult.allowed) {
           newResolvedMap[id] = "Yes, approve";
         } else {
@@ -178,7 +187,7 @@ export function useToolInterrupt(
         }
       } else if (payload.type === "client_tool") {
         const target = payload.args?.path || payload.args?.command || "";
-        const checkResult = PermissionManager.check(payload.name, target, activeCwd);
+        const checkResult = await PermissionManager.check(payload.name, target, activeCwd);
         if (checkResult.allowed) {
           const output = await executeClientTool(payload.name, payload.args, activeCwd);
           newResolvedMap[id] = output;

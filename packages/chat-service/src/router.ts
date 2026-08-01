@@ -59,6 +59,14 @@ const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
 // Global map to hold abort controllers for active streams
 const activeStreams = new Map<string, AbortController>();
 
+/** Abort all active SSE streams during shutdown */
+export function abortAllStreams() {
+  for (const [id, controller] of activeStreams) {
+    controller.abort();
+  }
+  activeStreams.clear();
+}
+
 export const chatRouter = router({
   streamChat: publicProcedure
     .use(chatValidatorMiddleware)

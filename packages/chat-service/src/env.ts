@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
-import path from "node:path";
+import { loadEnv } from "@wright/shared";
 
-dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+loadEnv(import.meta.dirname);

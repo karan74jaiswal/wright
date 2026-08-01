@@ -1,6 +1,5 @@
 import type { ChatRequest, ChatStreamEvent } from "@wright/shared";
 import { createAgentGraph } from "./graph";
-import { setupCheckpointer } from "./lib/checkpointer";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { Command } from "@langchain/langgraph";
 import { prisma as db } from "@wright/database/client";
@@ -53,8 +52,6 @@ export async function* streamAgent(
   };
 
   try {
-    await setupCheckpointer();
-
     const session = await db.session.findUnique({
       where: { id: sessionId },
       select: { cwd: true }
@@ -143,18 +140,22 @@ export async function* streamAgent(
 
       if (method === "values") {
         const messages = data.messages || [];
-        const lastMsg = messages[messages.length - 1];
+        
+        // Iterate backwards to find and persist ALL new messages (not just the last one)
+        // This handles parallel tool executions where multiple messages are appended at once
+        const newMessages: any[] = [];
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (!msg?.id || savedMessageIds.has(msg.id as string)) break;
+          newMessages.unshift(msg); // Prepend to maintain order
+        }
 
-        if (
-          lastMsg &&
-          lastMsg.id &&
-          !savedMessageIds.has(lastMsg.id as string)
-        ) {
-          const msgId = lastMsg.id as string;
+        for (const msg of newMessages) {
+          const msgId = msg.id as string;
           savedMessageIds.add(msgId);
-          const msgType = lastMsg.getType ? lastMsg.getType() : lastMsg.type;
+          const msgType = msg.getType ? msg.getType() : msg.type;
 
-          // Cross-run deduplication: Check if this message was already persisted in a prior run (e.g. before an interrupt)
+          // Cross-run deduplication: Check if this message was already persisted in a prior run
           const existingMsg = await db.message.findUnique({
             where: { id: msgId },
           });
@@ -163,17 +164,14 @@ export async function* streamAgent(
             if (msgType === "ai") {
               const elapsedMs = Date.now() - startTime;
               const contentToSave =
-                typeof lastMsg.content === "string"
-                  ? lastMsg.content
-                  : JSON.stringify(lastMsg.content);
+                typeof msg.content === "string"
+                  ? msg.content
+                  : JSON.stringify(msg.content);
               fullText = contentToSave;
 
               let toolCallsToSave = null;
-              if (
-                (lastMsg as any).tool_calls &&
-                (lastMsg as any).tool_calls.length > 0
-              ) {
-                toolCallsToSave = (lastMsg as any).tool_calls;
+              if (msg.tool_calls && msg.tool_calls.length > 0) {
+                toolCallsToSave = msg.tool_calls;
               }
 
               try {
@@ -200,10 +198,10 @@ export async function* streamAgent(
 
             if (msgType === "tool") {
               const contentToSave =
-                typeof lastMsg.content === "string"
-                  ? lastMsg.content
-                  : JSON.stringify(lastMsg.content);
-              const toolCallId = lastMsg.tool_call_id || "unknown";
+                typeof msg.content === "string"
+                  ? msg.content
+                  : JSON.stringify(msg.content);
+              const toolCallId = msg.tool_call_id || "unknown";
 
               try {
                 await db.message.create({

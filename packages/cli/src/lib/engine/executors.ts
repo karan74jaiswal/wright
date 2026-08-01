@@ -7,6 +7,19 @@ const execAsync = promisify(exec);
 
 export async function executeReadFile(args: any): Promise<string> {
   if (!args?.path) throw new Error("Missing 'path' argument");
+  
+  try {
+    const stats = await fs.stat(args.path);
+    if (stats.isDirectory()) {
+      throw new Error(`[STRICT ERROR] Path '${args.path}' is a directory, not a file. You MUST use the 'list_directory' tool instead.`);
+    }
+  } catch (err: any) {
+    if (err.code === "ENOENT") {
+      throw new Error(`[STRICT ERROR] File not found: '${args.path}'. Check the path and try again.`);
+    }
+    throw err;
+  }
+
   const content = await fs.readFile(args.path, "utf-8");
   return content;
 }
@@ -24,6 +37,19 @@ export async function executeWriteFile(args: any): Promise<string> {
 
 export async function executeListDirectory(args: any): Promise<string> {
   if (!args?.path) throw new Error("Missing 'path' argument");
+
+  try {
+    const stats = await fs.stat(args.path);
+    if (!stats.isDirectory()) {
+      throw new Error(`[STRICT ERROR] Path '${args.path}' is a file, not a directory. You MUST use the 'read_file' tool instead.`);
+    }
+  } catch (err: any) {
+    if (err.code === "ENOENT") {
+      throw new Error(`[STRICT ERROR] Directory not found: '${args.path}'. Check the path and try again.`);
+    }
+    throw err;
+  }
+
   const files = await fs.readdir(args.path, { withFileTypes: true });
   
   let output = `Directory listing for ${args.path}:\n`;

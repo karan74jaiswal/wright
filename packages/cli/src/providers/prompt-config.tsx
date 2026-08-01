@@ -1,4 +1,5 @@
-import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -73,17 +74,18 @@ function getInitialConfig(): PromptPreferences {
   }
 }
 
-function persistConfig(config: PromptPreferences) {
+async function persistConfig(config: PromptPreferences) {
   try {
-    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+    await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
     
     // Read existing to merge, just in case
     let existing = {};
     try {
-      existing = JSON.parse(readFileSync(PREFERENCES_PATH, { encoding: "utf-8" }));
+      const data = await readFile(PREFERENCES_PATH, { encoding: "utf-8" });
+      existing = JSON.parse(data);
     } catch (e) {}
 
-    writeFileSync(
+    await writeFile(
       PREFERENCES_PATH,
       JSON.stringify({ ...existing, ...config }, null, 2),
       {
