@@ -17,7 +17,9 @@ export type ChatStatus = "idle" | "streaming" | "interrupted" | "error";
 
 export interface UseChatOptions {
   sessionId: string;
+  toolsHash?: string;
   initialMessages: Message[];
+  forceSync?: () => Promise<void>;
 }
 
 export interface UseChatReturn {
@@ -35,7 +37,9 @@ export interface UseChatReturn {
 
 export function useChat({
   sessionId,
+  toolsHash,
   initialMessages,
+  forceSync,
 }: UseChatOptions): UseChatReturn {
   const toast = useToast();
   const trpc = useTRPC();
@@ -142,6 +146,7 @@ export function useChat({
         mode: currentMode,
         reasoningEffort,
         providerApiKeys,
+        toolsHash,
         ...(activeRequest || {}),
       },
       {
@@ -233,6 +238,27 @@ export function useChat({
           }
         },
         onError(err) {
+          if (
+            (err.message === "CACHE_MISS_RESYNC_REQUIRED" ||
+              err.message === "SESSION_CONFIG_NOT_SYNCED") &&
+            activeRequest &&
+            forceSync
+          ) {
+            console.log("[useChat] Cache miss in backend, forcing tools resync...");
+            forceSync()
+              .then(() => {
+                // Retry the request by updating the timestamp to trigger a new subscription
+                setActiveRequest((prev) =>
+                  prev ? { ...prev, timestamp: Date.now() } : null,
+                );
+              })
+              .catch((syncErr) => {
+                console.error("Failed to resync tools:", syncErr);
+                setStatus("error");
+              });
+            return; // Don't show toast or reset state yet
+          }
+
           console.error("Subscription Error:", err);
           toast.show({
             variant: ToastVariant.ERROR,
@@ -417,7 +443,6 @@ export function useChat({
     currentModel,
     currentMode,
     reasoningEffort,
-    providerApiKeys,
   ]);
 
   const isLoading = status === "streaming" || status === "interrupted";

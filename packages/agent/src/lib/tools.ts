@@ -11,19 +11,22 @@ export const readFileTool = tool(
     const result = interrupt({
       type: "client_tool",
       name: "read_file",
-      args: { path }
+      args: { path },
     });
     const resStr = String(result);
-    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for read_file(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__")
+      throw new Error(`User denied permission for read_file(${path})`);
     return resStr;
   },
   {
     name: "read_file",
     description: "Read the contents of a file on the user's local machine.",
     schema: z.object({
-      path: z.string().describe("The absolute or relative path to the file to read.")
-    })
-  }
+      path: z
+        .string()
+        .describe("The absolute or relative path to the file to read."),
+    }),
+  },
 );
 
 export const writeFileTool = tool(
@@ -31,20 +34,24 @@ export const writeFileTool = tool(
     const result = interrupt({
       type: "client_tool",
       name: "write_file",
-      args: { path, content }
+      args: { path, content },
     });
     const resStr = String(result);
-    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for write_file(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__")
+      throw new Error(`User denied permission for write_file(${path})`);
     return resStr;
   },
   {
     name: "write_file",
-    description: "Write or overwrite a file on the user's local machine with the provided content.",
+    description:
+      "Write or overwrite a file on the user's local machine with the provided content.",
     schema: z.object({
-      path: z.string().describe("The absolute or relative path to the file to write."),
-      content: z.string().describe("The entire content to write to the file.")
-    })
-  }
+      path: z
+        .string()
+        .describe("The absolute or relative path to the file to write."),
+      content: z.string().describe("The entire content to write to the file."),
+    }),
+  },
 );
 
 export const runCommandTool = tool(
@@ -52,19 +59,23 @@ export const runCommandTool = tool(
     const result = interrupt({
       type: "client_tool",
       name: "run_command",
-      args: { command }
+      args: { command },
     });
     const resStr = String(result);
-    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for run_command(${command})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__")
+      throw new Error(`User denied permission for run_command(${command})`);
     return resStr;
   },
   {
     name: "run_command",
-    description: "Run a bash/shell command on the user's local machine. Use this for testing, building, or executing git operations.",
+    description:
+      "Run a bash/shell command on the user's local machine. Use this for testing, building, or executing git operations.",
     schema: z.object({
-      command: z.string().describe("The command to execute (e.g. 'npm run test', 'ls -la').")
-    })
-  }
+      command: z
+        .string()
+        .describe("The command to execute (e.g. 'npm run test', 'ls -la')."),
+    }),
+  },
 );
 
 export const listDirectoryTool = tool(
@@ -72,21 +83,49 @@ export const listDirectoryTool = tool(
     const result = interrupt({
       type: "client_tool",
       name: "list_directory",
-      args: { path }
+      args: { path },
     });
     const resStr = String(result);
-    if (resStr === "Cancel" || resStr === "__CANCELLED__") throw new Error(`User denied permission for list_directory(${path})`);
+    if (resStr === "Cancel" || resStr === "__CANCELLED__")
+      throw new Error(`User denied permission for list_directory(${path})`);
     return resStr;
   },
   {
     name: "list_directory",
-    description: "List the contents of a directory on the user's local machine.",
+    description:
+      "List the contents of a directory on the user's local machine.",
     schema: z.object({
-      path: z.string().describe("The absolute or relative path to the directory to list.")
-    })
-  }
+      path: z
+        .string()
+        .describe("The absolute or relative path to the directory to list."),
+    }),
+  },
 );
 
+export const invokeSkillTool = tool(
+  async ({ name, args }) => {
+    const result = interrupt({
+      type: "invoke_skill",
+      name,
+      args,
+    });
+    return String(result);
+  },
+  {
+    name: "invoke_skill",
+    description:
+      "Invoke a specialized workflow skill. Returns instructions or dynamic data from the skill.",
+    schema: z.object({
+      name: z.string().describe("The exact name of the skill to invoke"),
+      args: z
+        .string()
+        .optional()
+        .describe(
+          "Optional arguments to pass to the skill for dynamic rendering, formatted as a JSON string",
+        ),
+    }),
+  },
+);
 
 // -----------------------------------------
 // USER INTERACTION TOOLS
@@ -100,18 +139,66 @@ export const askPermission = tool(
       reason,
     });
     const resStr = String(humanDecision);
-    if (resStr === "No, reject" || resStr === "Cancel") throw new Error(`User denied permission for ask_permission(${target})`);
+    if (resStr === "No, reject" || resStr === "Cancel")
+      throw new Error(`User denied permission for ask_permission(${target})`);
     return resStr;
   },
   {
     name: "ask_permission",
     description: "Ask the user for permission to execute a dangerous action.",
     schema: z.object({
-      target: z.string().describe("The exact command or action you want to execute"),
+      target: z
+        .string()
+        .describe("The exact command or action you want to execute"),
       reason: z.string().describe("Why you need to execute this action"),
     }),
-  }
+  },
 );
+
+// -----------------------------------------
+// MCP PROXY TOOLS
+// -----------------------------------------
+
+/**
+ * Creates LangChain proxy tools for MCP execution.
+ * We use @langchain/mcp-adapters strictly to convert MCP JSON schemas into Zod schemas.
+ * We override the actual execution to throw an interrupt so the frontend can execute it.
+ */
+export async function createMcpProxyTools(serverName: string, mcpToolsPayload: any[]) {
+  try {
+    const { loadMcpTools } = await import("@langchain/mcp-adapters");
+    
+    // A dummy client is required to initialize the adapter
+    const dummyClient = {
+      listTools: async () => ({ tools: mcpToolsPayload }),
+      callTool: async () => {
+        throw new Error("This should not be called because we override invoke");
+      },
+    };
+
+    const tools = await loadMcpTools(serverName, dummyClient as any);
+    
+    for (const t of tools) {
+      // Override invoke to bypass mcp-adapters' internal try/catch that swallows GraphInterrupt
+      t.invoke = async (input: any) => {
+        const res = interrupt({
+          type: "invoke_mcp",
+          serverName,
+          toolName: t.name,
+          args: input,
+        });
+        if (res === "__CANCELLED__" || res === "Cancel") {
+          throw new Error(`User denied permission for ${t.name}`);
+        }
+        return res;
+      };
+    }
+    return tools;
+  } catch (err) {
+    console.error(`Failed to initialize MCP proxy tools for ${serverName}:`, err);
+    return [];
+  }
+}
 
 export const askQuestion = tool(
   async ({ question, options, isMultiSelect }) => {
@@ -119,17 +206,24 @@ export const askQuestion = tool(
       type: "ask_question",
       question,
       options,
-      isMultiSelect
+      isMultiSelect,
     });
     return String(humanDecision);
   },
   {
     name: "ask_question",
-    description: "Ask the user a multiple-choice question to clarify requirements, solicit feedback, or pick an option.",
+    description:
+      "Ask the user a multiple-choice question to clarify requirements, solicit feedback, or pick an option.",
     schema: z.object({
       question: z.string().describe("The question to ask"),
-      options: z.array(z.string()).min(1).describe("The options to present to the user"),
-      isMultiSelect: z.boolean().optional().describe("If true, the user can select multiple options"),
-    })
-  }
+      options: z
+        .array(z.string())
+        .min(1)
+        .describe("The options to present to the user"),
+      isMultiSelect: z
+        .boolean()
+        .optional()
+        .describe("If true, the user can select multiple options"),
+    }),
+  },
 );

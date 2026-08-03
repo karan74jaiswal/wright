@@ -10,6 +10,8 @@ import * as Sentry from "@sentry/bun";
 import { TRPCError } from "@trpc/server";
 import { prisma as db } from "@wright/database/client";
 
+import { redis } from "@wright/redis";
+
 // Middleware to log Zod validation errors to Sentry
 const chatValidatorMiddleware = middleware(async ({ next, path }) => {
   const result = await next();
@@ -84,7 +86,56 @@ export const chatRouter = router({
       }
 
       try {
-        const stream = streamAgent(input, controller.signal);
+        const session = await db.session.findUnique({
+          where: { id: input.sessionId },
+        });
+
+        if (!session) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Session not found",
+          });
+        }
+
+        const targetHash = input.toolsHash || session.toolsHash;
+
+        if (!targetHash) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "SESSION_CONFIG_NOT_SYNCED",
+          });
+        }
+
+        if (input.toolsHash && input.toolsHash !== session.toolsHash) {
+          // Frontend requested a hash that the DB doesn't know about yet
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "CACHE_MISS_RESYNC_REQUIRED",
+          });
+        }
+
+        const redisKey = `tools:config_hash_${targetHash}`;
+        const cachedPayload = await redis.get(redisKey);
+
+        if (!cachedPayload) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "CACHE_MISS_RESYNC_REQUIRED",
+          });
+        }
+
+        const parsedTools = JSON.parse(cachedPayload);
+        console.log(parsedTools);
+        const resolvedSkills = parsedTools.skills || {};
+        const resolvedMcps = parsedTools.mcps || {};
+
+        const agentInput = {
+          ...input,
+          skills: resolvedSkills,
+          mcpServers: resolvedMcps,
+        };
+
+        const stream = streamAgent(agentInput, controller.signal);
         for await (const event of stream) {
           yield event;
         }

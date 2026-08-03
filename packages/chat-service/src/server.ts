@@ -12,7 +12,9 @@ import { setupCheckpointer } from "@wright/agent";
 const app = express();
 const port = Number(process.env.CHAT_SERVICE_PORT) || 3002;
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",");
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS || "http://localhost:3000"
+).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json({ limit: "1mb" }));
 

@@ -6,7 +6,7 @@
     "dev:session": "cd packages/session-service && bun run dev",
     "dev:chat": "cd packages/chat-service && bun run dev",
     "dev:gateway": "cd packages/api-gateway && bun run dev",
-    "dev:backend": "bun run dev:session & bun run dev:chat & bun run dev:gateway"
+    "dev:backend": "WORKSPACE_ROOT=$(pwd) bun run dev:session & WORKSPACE_ROOT=$(pwd) bun run dev:chat & WORKSPACE_ROOT=$(pwd) bun run dev:gateway"
   },
   "workspaces": [
     "packages/*"

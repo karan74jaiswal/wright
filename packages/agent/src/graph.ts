@@ -9,6 +9,7 @@ import { z } from "zod";
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import type { Mode } from "@wright/database/enums";
+import { interrupt } from "@langchain/langgraph";
 import { getCheckpointer } from "./lib/checkpointer";
 import { buildSystemPrompt } from "./lib/prompts";
 
@@ -19,6 +20,7 @@ import {
   writeFileTool,
   runCommandTool,
   listDirectoryTool,
+  invokeSkillTool,
 } from "./lib/tools";
 
 const buildTools = [
@@ -26,10 +28,11 @@ const buildTools = [
   writeFileTool,
   runCommandTool,
   listDirectoryTool,
+  invokeSkillTool,
   askPermission,
   askQuestion,
 ];
-const planTools = [readFileTool, listDirectoryTool, askQuestion]; // Read-only tools + clarification
+const planTools = [readFileTool, listDirectoryTool, runCommandTool, invokeSkillTool, askQuestion]; // Read-only tools + clarification
 
 // Node: Agent
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
@@ -66,7 +69,8 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
     apiKey,
     reasoningEffort,
   });
-  const tools = mode === "PLAN" ? planTools : buildTools;
+  const mcpTools = (config?.configurable?.mcpTools || []) as any[];
+  const tools = [...(mode === "PLAN" ? planTools : buildTools), ...mcpTools];
 
   if (!model.bindTools) {
     throw new Error(`Model ${modelId} does not support bindTools`);
@@ -74,11 +78,14 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
 
   const modelWithTools = model.bindTools(tools);
 
+  const skills = config?.configurable?.skills as Record<string, any> | undefined;
+  const mcpServers = config?.configurable?.mcpServers as Record<string, any> | undefined;
+
   // Always ensure the system prompt matches the current mode.
   // If the first message is a system message, replace it (mode may have changed).
   // Otherwise, prepend the system prompt.
   let messages = state.messages;
-  const systemPrompt = buildSystemPrompt({ mode, sessionCwd, activeCwd });
+  const systemPrompt = buildSystemPrompt({ mode, sessionCwd, activeCwd, skills, mcpServers });
   if (messages.length === 0) {
     messages = [systemPrompt];
   } else if (
@@ -96,9 +103,21 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   return { messages: [response] };
 };
 
-// Node: Tools
-const buildToolNode = new ToolNode(buildTools, { handleToolErrors: true });
-const planToolNode = new ToolNode(planTools, { handleToolErrors: true });
+
+
+const executeBuildTools = async (state: AgentStateType, config?: RunnableConfig) => {
+  const mcpTools = (config?.configurable?.mcpTools || []) as any[];
+  const allTools = [...buildTools, ...mcpTools];
+  const node = new ToolNode(allTools, { handleToolErrors: true });
+  return node.invoke(state, config);
+};
+
+const executePlanTools = async (state: AgentStateType, config?: RunnableConfig) => {
+  const mcpTools = (config?.configurable?.mcpTools || []) as any[];
+  const allTools = [...planTools, ...mcpTools];
+  const node = new ToolNode(allTools, { handleToolErrors: true });
+  return node.invoke(state, config);
+};
 
 // Conditional Edge Logic
 const shouldContinue = (state: AgentStateType, config?: RunnableConfig) => {
@@ -118,8 +137,8 @@ const shouldContinue = (state: AgentStateType, config?: RunnableConfig) => {
 export const createAgentGraph = () => {
   return new StateGraph(AgentState)
     .addNode("agent", callModel)
-    .addNode("build_tools", buildToolNode)
-    .addNode("plan_tools", planToolNode)
+    .addNode("build_tools", executeBuildTools)
+    .addNode("plan_tools", executePlanTools)
     .addEdge(START, "agent")
     .addConditionalEdges("agent", shouldContinue, [
       "build_tools",

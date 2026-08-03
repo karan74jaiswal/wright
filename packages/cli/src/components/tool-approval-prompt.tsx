@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTheme } from "../providers/theme";
 import { useKeyboardLayer } from "../providers/keyboard";
 import { useKeyboard } from "@opentui/react";
@@ -15,12 +15,45 @@ export function ToolApprovalPrompt({ pendingApproval, onResolve }: ToolApprovalP
   const { colors } = useTheme();
   const { push, pop, isTopLayer } = useKeyboardLayer();
 
-  const options = [
-    { label: "1. Yes, allow once", value: "allow_once" as const },
-    { label: "2. Yes, allow for this session", value: "allow_session" as const },
-    { label: "3. Yes, allow permanently", value: "allow_system" as const },
-    { label: "4. No, deny", value: "deny" as const },
-  ];
+  const options = React.useMemo(() => {
+    const opts: Array<{ label: string; value: "allow_once" | "allow_session" | "allow_system" | "deny"; wildcard?: string }> = [];
+    
+    opts.push({ label: "Yes, allow once", value: "allow_once" });
+    opts.push({ label: "Yes, allow for this session (strict match)", value: "allow_session" });
+    opts.push({ label: "Yes, allow permanently (strict match)", value: "allow_system" });
+    
+    let wildcardDesc = "";
+    let wildcard: string | undefined = undefined;
+    
+    if (pendingApproval.toolName === "run_command" && pendingApproval.target) {
+      const parts = pendingApproval.target.split(" ");
+      if (parts.length > 1) {
+        wildcard = `${parts[0]} *`;
+        wildcardDesc = `Allow all '${parts[0]}' commands`;
+      }
+    } else if (pendingApproval.toolName === "invoke_mcp" && pendingApproval.target) {
+      const parts = pendingApproval.target.split(".");
+      if (parts.length > 1) {
+        wildcard = `${parts[0]}.*`;
+        wildcardDesc = `Allow all tools on '${parts[0]}' server`;
+      }
+    } else if (pendingApproval.target && pendingApproval.target.includes("/")) {
+      const dir = pendingApproval.target.substring(0, pendingApproval.target.lastIndexOf("/"));
+      if (dir) {
+        wildcard = `${dir}/*`;
+        wildcardDesc = `Allow all files in '${dir}'`;
+      }
+    }
+
+    if (wildcard && wildcardDesc) {
+      opts.push({ label: `Yes, for this session (${wildcardDesc})`, value: "allow_session", wildcard });
+      opts.push({ label: `Yes, permanently (${wildcardDesc})`, value: "allow_system", wildcard });
+    }
+    
+    opts.push({ label: "No, deny", value: "deny" });
+    
+    return opts.map((o, i) => ({ ...o, label: `${i + 1}. ${o.label}` }));
+  }, [pendingApproval]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -49,21 +82,7 @@ export function ToolApprovalPrompt({ pendingApproval, onResolve }: ToolApprovalP
       const selection = options[selectedIndex];
       if (!selection) return;
 
-      // Automatically construct a wildcard for directory/command rules for session/system saves
-      let wildcard: string | undefined = undefined;
-      if (selection.value === "allow_session" || selection.value === "allow_system") {
-        if (pendingApproval.toolName === "run_command" && pendingApproval.target) {
-          // just taking the first word as a prefix wildcard (e.g. `npm install` -> `npm *`)
-          const parts = pendingApproval.target.split(" ");
-          wildcard = parts.length > 1 ? `${parts[0]} *` : pendingApproval.target;
-        } else if (pendingApproval.target && pendingApproval.target.includes("/")) {
-           // For files, allow the entire directory
-           const dir = pendingApproval.target.substring(0, pendingApproval.target.lastIndexOf("/"));
-           wildcard = `${dir}/*`;
-        }
-      }
-
-      onResolve(selection.value, wildcard);
+      onResolve(selection.value, selection.wildcard);
     }
   });
 
@@ -97,7 +116,7 @@ export function ToolApprovalPrompt({ pendingApproval, onResolve }: ToolApprovalP
           const isSelected = index === selectedIndex;
           return (
             <box
-              key={opt.value}
+              key={opt.label}
               flexDirection="row"
               backgroundColor={isSelected ? colors.selection : undefined}
               paddingX={1}

@@ -6,12 +6,16 @@ type SystemPromptParams = {
   mode: Mode;
   sessionCwd: string;
   activeCwd?: string;
+  mcpServers?: Record<string, any>;
+  skills?: Record<string, any>;
 };
 
 export function buildSystemPrompt({
   mode,
   sessionCwd,
   activeCwd,
+  mcpServers,
+  skills,
 }: SystemPromptParams): SystemMessage {
   const parts: string[] = [];
   const shell = process.env.SHELL || "bash";
@@ -100,6 +104,17 @@ You are an expert autonomous developer authorized to execute changes. Follow the
     - ABSOLUTE PATHS ONLY: Always construct and pass full, absolute paths to file system tools (e.g., \`/Users/kartikey/Desktop/wright/package.json\` NOT \`package.json\`).
     - TOOL SPECIFICITY: You MUST strictly distinguish between files and directories. NEVER call \`list_directory\` on a file. NEVER call \`read_file\` on a directory.
  `);
+
+  if (skills && Object.keys(skills).length > 0) {
+    const skillList = Object.entries(skills)
+      .map(([name, meta]) => `- **${name}**: ${meta.description}`)
+      .join("\n");
+    parts.push(`\n# Available Skills
+The following skills provide specialized instructions for specific tasks.
+When a task matches a skill's description, call the \`invoke_skill\` tool with the skill's name to load its full instructions.
+Available skills:
+${skillList}`);
+  }
 
   return new SystemMessage(parts.join("\n"));
 }

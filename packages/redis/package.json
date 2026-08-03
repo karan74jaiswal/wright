@@ -1,0 +1,12 @@
+{
+  "name": "@wright/redis",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

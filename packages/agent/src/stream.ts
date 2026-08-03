@@ -6,16 +6,29 @@ import { prisma as db } from "@wright/database/client";
 import { Role, MessageStatus, Mode } from "@wright/database/enums";
 
 export async function* streamAgent(
-  input: ChatRequest,
+  input: ChatRequest & {
+    skills?: Record<string, any>;
+    mcpServers?: Record<string, any>;
+  },
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
-  const { sessionId, message, activeCwd, resume, model, mode, isAutoResume, reasoningEffort, providerApiKeys } = input;
+  const {
+    sessionId,
+    message,
+    activeCwd,
+    resume,
+    model,
+    mode,
+    isAutoResume,
+    reasoningEffort,
+    providerApiKeys,
+  } = input;
 
   let startTime = Date.now();
   let fullText = "";
   let fullReasoning = "";
   let reasoningDurationMs: number | null = null;
-  
+
   let graph: ReturnType<typeof createAgentGraph> | null = null;
   let config: any = null;
 
@@ -54,9 +67,9 @@ export async function* streamAgent(
   try {
     const session = await db.session.findUnique({
       where: { id: sessionId },
-      select: { cwd: true }
+      select: { cwd: true },
     });
-    
+
     // If we can't find session cwd (e.g. invalid session), fallback to process.cwd() or activeCwd
     const sessionCwd = session?.cwd || activeCwd || process.cwd();
 
@@ -76,8 +89,37 @@ export async function* streamAgent(
     const newMessages = message ? [new HumanMessage(message)] : [];
     graph = createAgentGraph();
 
+    let mcpTools: any[] = [];
+    if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
+      try {
+        const { createMcpProxyTools } = await import("./lib/tools");
+
+        for (const [serverName, serverPayload] of Object.entries(
+          input.mcpServers as Record<string, any>,
+        )) {
+          if (!serverPayload.tools) continue;
+          
+          const tools = await createMcpProxyTools(serverName, serverPayload.tools);
+          mcpTools.push(...tools);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to initialize MCP proxy tools:", err);
+      }
+    }
+
     config = {
-      configurable: { thread_id: sessionId, modelId: model, mode, reasoningEffort, providerApiKeys, sessionCwd, activeCwd },
+      configurable: {
+        thread_id: sessionId,
+        modelId: model,
+        mode,
+        reasoningEffort,
+        providerApiKeys,
+        sessionCwd,
+        activeCwd,
+        mcpTools,
+        skills: input.skills,
+        mcpServers: input.mcpServers,
+      },
     };
 
     const currentState = await graph.getState(config);
@@ -123,7 +165,7 @@ export async function* streamAgent(
             block.fields?.type === "tool_call_chunk")
         ) {
           const tc = block.type === "tool-call-delta" ? block : block.fields;
-          
+
           // Ignore completely empty tool call chunks which some models emit when transitioning blocks
           if (!tc.id && tc.index === undefined && !tc.name && !tc.args) {
             continue;
@@ -140,7 +182,7 @@ export async function* streamAgent(
 
       if (method === "values") {
         const messages = data.messages || [];
-        
+
         // Iterate backwards to find and persist ALL new messages (not just the last one)
         // This handles parallel tool executions where multiple messages are appended at once
         const newMessages: any[] = [];
@@ -233,6 +275,7 @@ export async function* streamAgent(
 
     if (signal?.aborted) {
       await persistInterruptedMessage();
+      // Cleanup not needed for dummy client
       return;
     }
 
@@ -242,28 +285,36 @@ export async function* streamAgent(
     );
 
     if (interruptedTask) {
-        const interrupts = interruptedTask.interrupts;
-        if (interrupts && interrupts.length > 0) {
-          const payloads = interrupts.map((i) => ({ id: i.id, value: i.value }));
-          yield { type: "interrupt", payload: payloads } as ChatStreamEvent;
-          return;
-        }
+      const interrupts = interruptedTask.interrupts;
+      if (interrupts && interrupts.length > 0) {
+        const payloads = interrupts.map((i) => ({ id: i.id, value: i.value }));
+        yield { type: "interrupt", payload: payloads } as ChatStreamEvent;
+        // Cleanup not needed for dummy client
+        return;
+      }
     }
 
     yield { type: "done" } as ChatStreamEvent;
+    // Cleanup not needed for dummy client
   } catch (err) {
     if (
       signal?.aborted ||
       (err instanceof Error && err.name === "AbortError")
     ) {
       await persistInterruptedMessage();
+      // Cleanup not needed for dummy client
       return;
     }
 
     const errorMsg = err instanceof Error ? err.message : String(err);
-    
+
     // In LangGraph 0.2, calling interrupt() throws GraphInterrupt which propagates through streamEvents.
-    if (errorMsg.includes("GraphInterrupt") || (err as any)?.name === "GraphInterrupt") {
+    if (
+      errorMsg.includes("GraphInterrupt") ||
+      errorMsg.includes("NodeInterrupt") ||
+      (err as any)?.name === "GraphInterrupt" ||
+      (err as any)?.name === "NodeInterrupt"
+    ) {
       const finalState = await graph!.getState(config!);
       const interruptedTask = finalState.tasks?.find(
         (t) => t.interrupts && t.interrupts.length > 0,
@@ -272,11 +323,16 @@ export async function* streamAgent(
       if (interruptedTask) {
         const interrupts = interruptedTask.interrupts;
         if (interrupts && interrupts.length > 0) {
-          const payloads = interrupts.map((i) => ({ id: i.id, value: i.value }));
+          const payloads = interrupts.map((i) => ({
+            id: i.id,
+            value: i.value,
+          }));
           yield { type: "interrupt", payload: payloads } as ChatStreamEvent;
+          // Cleanup not needed for dummy client
           return;
         }
       }
+      // Cleanup not needed for dummy client
       return; // It interrupted but we couldn't find the payload, just gracefully stop.
     }
 
@@ -298,5 +354,6 @@ export async function* streamAgent(
     }
 
     yield { type: "error", message: errorMsg } as ChatStreamEvent;
+    // Cleanup not needed for dummy client
   }
 }

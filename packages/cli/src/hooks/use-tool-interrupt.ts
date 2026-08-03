@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PermissionManager } from "../lib/permissions";
 import type { PermissionScope } from "../lib/permissions";
 import { executeClientTool } from "../lib/engine";
+import { executeSkill } from "../lib/engine/skills";
+import { executeMcpTool } from "../lib/engine/mcp";
+import type { DiscoveredSkill } from "../lib/skills/types";
 
 export interface PendingToolApproval {
   toolName: string;
@@ -13,8 +16,12 @@ export interface PendingToolApproval {
 export function useToolInterrupt(
   interruptPayload: any | null,
   submitInterrupt: (result: any) => void,
-  activeCwd: string
+  activeCwd: string,
+  skills?: Map<string, DiscoveredSkill>
 ) {
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
+
   const [pendingApproval, setPendingApproval] = useState<{
     toolName: string;
     target: string;
@@ -38,7 +45,7 @@ export function useToolInterrupt(
       // If there are any generic interrupts, bail out and let InterruptPrompt handle them
       const hasGeneric = payloads.some(p => {
         const payload = p.value || p;
-        return payload.type !== "client_tool" && payload.type !== "ask_permission";
+        return payload.type !== "client_tool" && payload.type !== "ask_permission" && payload.type !== "invoke_skill" && payload.type !== "invoke_mcp";
       });
       if (hasGeneric) return;
 
@@ -88,6 +95,39 @@ export function useToolInterrupt(
               toolName: name,
               target,
               args,
+              isBackendPermissionPrompt: false,
+              interruptId: id,
+              resolvedMap,
+              remainingPayloads: payloads.slice(i + 1)
+            });
+            blockedIndex = i;
+            break;
+          }
+        }
+
+        // 3. Is it an invoke_skill?
+        if (payload.type === "invoke_skill") {
+          const { name, args } = payload;
+          const output = await executeSkill(name, args, activeCwd, skillsRef.current);
+          resolvedMap[id] = output;
+          continue;
+        }
+
+        // 4. Is it an invoke_mcp?
+        if (payload.type === "invoke_mcp") {
+          const { serverName, toolName, args } = payload;
+          const target = `${serverName}.${toolName}`;
+
+          const checkResult = await PermissionManager.check("invoke_mcp", target, activeCwd);
+          
+          if (checkResult.allowed) {
+            const output = await executeMcpTool(serverName, toolName, args);
+            resolvedMap[id] = output;
+          } else {
+            setPendingApproval({
+              toolName: "invoke_mcp",
+              target,
+              args: payload,
               isBackendPermissionPrompt: false,
               interruptId: id,
               resolvedMap,
@@ -152,6 +192,9 @@ export function useToolInterrupt(
     const newResolvedMap = { ...resolvedMap };
     if (isBackendPermissionPrompt) {
       newResolvedMap[interruptId] = "Yes, approve";
+    } else if (toolName === "invoke_mcp") {
+      const output = await executeMcpTool(args.serverName, args.toolName, args.args);
+      newResolvedMap[interruptId] = output;
     } else {
       const output = await executeClientTool(toolName, args, activeCwd);
       newResolvedMap[interruptId] = output;
@@ -196,6 +239,28 @@ export function useToolInterrupt(
             toolName: payload.name,
             target,
             args: payload.args,
+            isBackendPermissionPrompt: false,
+            interruptId: id,
+            resolvedMap: newResolvedMap,
+            remainingPayloads: remainingPayloads.slice(i + 1)
+          });
+          nextBlocked = true;
+          break;
+        }
+      } else if (payload.type === "invoke_skill") {
+        const output = await executeSkill(payload.name, payload.args, activeCwd, skillsRef.current);
+        newResolvedMap[id] = output;
+      } else if (payload.type === "invoke_mcp") {
+        const target = `${payload.serverName}.${payload.toolName}`;
+        const checkResult = await PermissionManager.check("invoke_mcp", target, activeCwd);
+        if (checkResult.allowed) {
+          const output = await executeMcpTool(payload.serverName, payload.toolName, payload.args);
+          newResolvedMap[id] = output;
+        } else {
+          setPendingApproval({
+            toolName: "invoke_mcp",
+            target,
+            args: payload,
             isBackendPermissionPrompt: false,
             interruptId: id,
             resolvedMap: newResolvedMap,
