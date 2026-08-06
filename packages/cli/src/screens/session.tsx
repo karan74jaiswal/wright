@@ -37,6 +37,8 @@ interface ChatMessageProps {
   hideHeader?: boolean;
   groupDuration?: number;
   allMessages?: SessionData["messages"];
+  isPendingApproval?: boolean;
+  isLastVisible?: boolean;
 }
 
 const ChatMessage = memo(function ChatMessage({
@@ -46,6 +48,8 @@ const ChatMessage = memo(function ChatMessage({
   hideHeader,
   groupDuration,
   allMessages,
+  isPendingApproval,
+  isLastVisible,
 }: ChatMessageProps) {
   if (msg.role === "USER")
     return <UserMsg message={msg.content} mode={msg.mode as Mode} />;
@@ -89,7 +93,7 @@ const ChatMessage = memo(function ChatMessage({
         acc[tcId] = {
           name: tc.name,
           args: tc.args,
-          result: toolMsg ? toolMsg.content : true,
+          result: toolMsg ? toolMsg.content : (msg.status === "INTERRUPTED" ? undefined : true),
         };
         if (toolMsg) {
           acc._used = [...(acc._used || []), toolMsg.id];
@@ -121,6 +125,8 @@ const ChatMessage = memo(function ChatMessage({
     // Ignore JSON parse error, use raw content
   }
 
+  const showInterruptedBadge = msg.status === "INTERRUPTED" && (!isLastVisible || isPendingApproval);
+
   return (
     <BotMsg
       content={displayContent}
@@ -129,7 +135,7 @@ const ChatMessage = memo(function ChatMessage({
       reasoningDuration={msg.reasoningDuration || undefined}
       toolCalls={parsedToolCalls}
       mode={msg.mode}
-      status={msg.status}
+      status={showInterruptedBadge ? "INTERRUPTED" : (msg.status === "INTERRUPTED" ? undefined : msg.status)}
       duration={groupDuration ?? msg.duration}
       showReasoning={showReasoning}
       reasoningEffort={msg.reasoningEffort}
@@ -149,12 +155,15 @@ const SessionInner = ({ id }: { id: string }) => {
   const { isTopLayer } = useKeyboardLayer();
 
   useKeyboard(
-    useCallback((key: any) => {
-      if (!isTopLayer("base")) return;
-      if (key.ctrl && key.name === "o") {
-        setShowReasoning((prev) => !prev);
-      }
-    }, [isTopLayer])
+    useCallback(
+      (key: any) => {
+        if (!isTopLayer("base")) return;
+        if (key.ctrl && key.name === "o") {
+          setShowReasoning((prev) => !prev);
+        }
+      },
+      [isTopLayer],
+    ),
   );
 
   const prefetched = useMemo(() => {
@@ -168,11 +177,17 @@ const SessionInner = ({ id }: { id: string }) => {
   const trpc = useTRPC();
 
   const isPreSynced = useMemo(() => {
-    return !!(location.state && typeof location.state === "object" && "session" in location.state);
+    return !!(
+      location.state &&
+      typeof location.state === "object" &&
+      "session" in location.state
+    );
   }, [location.state]);
 
   const [synced, setSynced] = useState(isPreSynced);
-  const syncConfigMutation = useMutation(trpc.session.syncSessionConfig.mutationOptions());
+  const syncConfigMutation = useMutation(
+    trpc.session.syncSessionConfig.mutationOptions(),
+  );
 
   const {
     data: rawSession,
@@ -187,7 +202,9 @@ const SessionInner = ({ id }: { id: string }) => {
 
   const session = rawSession as SessionData | undefined;
 
-  const [currentToolsHash, setCurrentToolsHash] = useState<string | undefined>(session?.toolsHash || undefined);
+  const [currentToolsHash, setCurrentToolsHash] = useState<string | undefined>(
+    session?.toolsHash || undefined,
+  );
 
   useEffect(() => {
     if (!id || isSkillsLoading || isMcpLoading || !session) return;
@@ -198,9 +215,10 @@ const SessionInner = ({ id }: { id: string }) => {
         {
           name: skill.name,
           path: skill.skillFilePath,
-          description: skill.frontmatter.description || "No description provided.",
+          description:
+            skill.frontmatter.description || "No description provided.",
         },
-      ])
+      ]),
     );
     const optimizedMcps = Object.fromEntries(
       Array.from(servers.entries()).map(([key, server]) => [
@@ -211,15 +229,21 @@ const SessionInner = ({ id }: { id: string }) => {
           source: server.source,
           tools: server.tools || [],
         },
-      ])
+      ]),
     );
 
     let isMounted = true;
 
     const syncState = async () => {
       // Compute CAS Hash identical to backend
-      const payloadString = JSON.stringify({ skills: optimizedSkills, mcps: optimizedMcps });
-      const hashHex = crypto.createHash("sha256").update(payloadString).digest("hex");
+      const payloadString = JSON.stringify({
+        skills: optimizedSkills,
+        mcps: optimizedMcps,
+      });
+      const hashHex = crypto
+        .createHash("sha256")
+        .update(payloadString)
+        .digest("hex");
       if (isMounted) setCurrentToolsHash(hashHex);
 
       // If local hash matches DB hash, we are in sync!
@@ -244,8 +268,10 @@ const SessionInner = ({ id }: { id: string }) => {
 
     syncState();
 
-    return () => { isMounted = false; };
-  }, [id, discoveredSkills, servers, isSkillsLoading, isMcpLoading, session?.toolsHash]);
+    return () => {
+      isMounted = false;
+    };
+  }, [id, discoveredSkills, servers, isSkillsLoading, isMcpLoading, session]);
 
   useEffect(() => {
     if (isError) {
@@ -271,9 +297,10 @@ const SessionInner = ({ id }: { id: string }) => {
         {
           name: skill.name,
           path: skill.skillFilePath,
-          description: skill.frontmatter.description || "No description provided.",
+          description:
+            skill.frontmatter.description || "No description provided.",
         },
-      ])
+      ]),
     );
     const optimizedMcps = Object.fromEntries(
       Array.from(servers.entries()).map(([key, server]) => [
@@ -284,7 +311,7 @@ const SessionInner = ({ id }: { id: string }) => {
           source: server.source,
           tools: server.tools || [],
         },
-      ])
+      ]),
     );
 
     await syncConfigMutation.mutateAsync({
@@ -292,8 +319,14 @@ const SessionInner = ({ id }: { id: string }) => {
       enabledSkills: optimizedSkills,
       enabledMcps: optimizedMcps,
     });
-    const payloadString = JSON.stringify({ skills: optimizedSkills, mcps: optimizedMcps });
-    const hashHex = crypto.createHash("sha256").update(payloadString).digest("hex");
+    const payloadString = JSON.stringify({
+      skills: optimizedSkills,
+      mcps: optimizedMcps,
+    });
+    const hashHex = crypto
+      .createHash("sha256")
+      .update(payloadString)
+      .digest("hex");
     setCurrentToolsHash(hashHex);
   }, [id, discoveredSkills, servers, syncConfigMutation]);
 
@@ -416,6 +449,8 @@ const SessionInner = ({ id }: { id: string }) => {
                 hideHeader={hideHeader}
                 groupDuration={groupDuration}
                 allMessages={arr}
+                isPendingApproval={!!pendingApproval}
+                isLastVisible={msg.id === lastVisibleMsg?.id}
               />
             </box>
           );
@@ -452,12 +487,14 @@ const SessionInner = ({ id }: { id: string }) => {
               return (
                 t !== "client_tool" &&
                 t !== "ask_permission" &&
-                t !== "invoke_skill"
+                t !== "invoke_skill" &&
+                t !== "invoke_mcp"
               );
             })
           : interruptPayload.type !== "client_tool" &&
             interruptPayload.type !== "ask_permission" &&
-            interruptPayload.type !== "invoke_skill") ? (
+            interruptPayload.type !== "invoke_skill" &&
+            interruptPayload.type !== "invoke_mcp") ? (
           <box key="interrupt" flexDirection="column" width="100%">
             <InterruptPrompt
               payload={interruptPayload}

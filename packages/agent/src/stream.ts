@@ -65,15 +65,18 @@ export async function* streamAgent(
   };
 
   try {
+    console.log("streamAgent: fetching session from db...", sessionId);
     const session = await db.session.findUnique({
       where: { id: sessionId },
       select: { cwd: true },
     });
+    console.log("streamAgent: session found", session?.cwd);
 
     // If we can't find session cwd (e.g. invalid session), fallback to process.cwd() or activeCwd
     const sessionCwd = session?.cwd || activeCwd || process.cwd();
 
     if (message && !isAutoResume) {
+      console.log("streamAgent: creating message record...");
       await db.message.create({
         data: {
           sessionId,
@@ -84,29 +87,34 @@ export async function* streamAgent(
           status: MessageStatus.COMPLETED,
         },
       });
+      console.log("streamAgent: message record created");
     }
 
+    console.log("streamAgent: building newMessages...");
     const newMessages = message ? [new HumanMessage(message)] : [];
+    console.log("streamAgent: newMessages built", newMessages);
+    console.log("streamAgent: creating agent graph...");
     graph = createAgentGraph();
+    console.log("streamAgent: graph created");
 
     let mcpTools: any[] = [];
     if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
+      console.log("streamAgent: loading mcp tools...");
       try {
         const { createMcpProxyTools } = await import("./lib/tools");
-
         for (const [serverName, serverPayload] of Object.entries(
           input.mcpServers as Record<string, any>,
         )) {
           if (!serverPayload.tools) continue;
-          
           const tools = await createMcpProxyTools(serverName, serverPayload.tools);
           mcpTools.push(...tools);
         }
-      } catch (err: unknown) {
-        console.error("Failed to initialize MCP proxy tools:", err);
+      } catch (err) {
+        console.error("Failed to load mcp proxy tools:", err);
       }
     }
 
+    console.log("streamAgent: setting up config...");
     config = {
       configurable: {
         thread_id: sessionId,
@@ -117,13 +125,15 @@ export async function* streamAgent(
         sessionCwd,
         activeCwd,
         mcpTools,
-        skills: input.skills,
+        skills: input.skills || {},
         mcpServers: input.mcpServers,
       },
     };
 
+    console.log("streamAgent: getting current state...");
     const currentState = await graph.getState(config);
     const hasState = Object.keys(currentState.values).length > 0;
+    console.log("streamAgent: hasState", hasState);
 
     const runInput = (
       resume
@@ -133,16 +143,18 @@ export async function* streamAgent(
           : null
     ) as any;
 
+    console.log("streamAgent: streaming events...");
     const eventStream = (await graph.streamEvents(runInput, {
       version: "v3",
       ...config,
-
       signal,
     })) as unknown as AsyncGenerator<any, void, unknown>;
+    console.log("streamAgent: event stream created");
 
     const savedMessageIds = new Set<string>();
 
     for await (const event of eventStream) {
+      console.log("streamAgent: got event (raw)", JSON.stringify(event));
       if (signal?.aborted) break;
 
       const method = event.method;
@@ -294,11 +306,12 @@ export async function* streamAgent(
       }
     }
 
-    yield { type: "done" } as ChatStreamEvent;
+    yield { type: "done", jobId: input.jobId } as ChatStreamEvent;
     // Cleanup not needed for dummy client
-  } catch (err) {
+  } catch (err: unknown) {
+    console.error("streamAgent: caught error!", err);
     if (
-      signal?.aborted ||
+      (err instanceof Error && err.name === "GraphInterrupt") ||
       (err instanceof Error && err.name === "AbortError")
     ) {
       await persistInterruptedMessage();
@@ -323,6 +336,21 @@ export async function* streamAgent(
       if (interruptedTask) {
         const interrupts = interruptedTask.interrupts;
         if (interrupts && interrupts.length > 0) {
+          try {
+            const lastMsg = await db.message.findFirst({
+              where: { sessionId, role: Role.ASSISTANT },
+              orderBy: { createdAt: 'desc' }
+            });
+            if (lastMsg) {
+              await db.message.update({
+                where: { id: lastMsg.id },
+                data: { status: MessageStatus.INTERRUPTED }
+              });
+            }
+          } catch (dbErr) {
+            console.error("Failed to update message status to INTERRUPTED:", dbErr);
+          }
+
           const payloads = interrupts.map((i) => ({
             id: i.id,
             value: i.value,
@@ -353,7 +381,7 @@ export async function* streamAgent(
       console.error("Failed to persist error message:", dbErr);
     }
 
-    yield { type: "error", message: errorMsg } as ChatStreamEvent;
+    yield { type: "error", message: errorMsg, jobId: input.jobId } as ChatStreamEvent;
     // Cleanup not needed for dummy client
   }
 }

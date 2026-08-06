@@ -5,9 +5,9 @@ import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
 import { appRouter } from "./index";
-import { abortAllStreams } from "./router";
 import { prisma as db } from "@wright/database/client";
 import { setupCheckpointer } from "@wright/agent";
+import { setupBullBoard } from "./dashboard";
 
 const app = express();
 const port = Number(process.env.CHAT_SERVICE_PORT) || 3002;
@@ -16,7 +16,7 @@ const ALLOWED_ORIGINS = (
   process.env.CORS_ORIGINS || "http://localhost:3000"
 ).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "50mb" }));
 
 const createContext = ({
   req,
@@ -48,6 +48,12 @@ app.get("/", (_req, res) => {
   res.send("Chat service is running");
 });
 
+// Easily toggle this on/off when you want to monitor jobs!
+const ENABLE_DASHBOARD = true; 
+if (ENABLE_DASHBOARD) {
+  setupBullBoard(app);
+}
+
 const server = http.createServer(app);
 // Use an elevated timeout for SSE streaming instead of disabling entirely.
 // 10 minutes allows long AI responses without enabling Slowloris attacks.
@@ -68,7 +74,6 @@ setupCheckpointer()
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Chat service shutting down gracefully...");
-  abortAllStreams();
   server.close(() => {
     console.log("Chat service stopped.");
   });
@@ -77,8 +82,7 @@ const shutdown = async () => {
   } catch (e) {
     console.error("Failed to disconnect database:", e);
   }
-  // Force exit after 10 seconds if connections don't drain
-  setTimeout(() => process.exit(1), 10_000).unref();
+  process.exit(0);
 };
 
 process.on("SIGTERM", shutdown);

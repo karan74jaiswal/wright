@@ -181,11 +181,17 @@ export async function createMcpProxyTools(serverName: string, mcpToolsPayload: a
     for (const t of tools) {
       // Override invoke to bypass mcp-adapters' internal try/catch that swallows GraphInterrupt
       t.invoke = async (input: any) => {
+        // LangGraph's ToolNode passes the full ToolCall object to t.invoke()
+        // We need to extract just the args to pass to the MCP server.
+        const actualArgs = (input && typeof input === 'object' && input.type === 'tool_call' && 'args' in input) 
+          ? input.args 
+          : input;
+
         const res = interrupt({
           type: "invoke_mcp",
           serverName,
           toolName: t.name,
-          args: input,
+          args: actualArgs,
         });
         if (res === "__CANCELLED__" || res === "Cancel") {
           throw new Error(`User denied permission for ${t.name}`);

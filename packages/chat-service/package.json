@@ -9,6 +9,8 @@
     "dev": "bun --watch --preload ./src/env.ts src/server.ts"
   },
   "dependencies": {
+    "@bull-board/api": "^8.6.0",
+    "@bull-board/express": "^8.6.0",
     "@langchain/core": "^1.2.2",
     "@sentry/bun": "^10.65.0",
     "@trpc/server": "^11.18.0",
@@ -16,6 +18,7 @@
     "@wright/database": "workspace:*",
     "@wright/redis": "workspace:*",
     "@wright/shared": "workspace:*",
+    "bullmq": "^6.0.8",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

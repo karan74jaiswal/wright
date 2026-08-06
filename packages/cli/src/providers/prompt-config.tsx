@@ -33,6 +33,8 @@ interface PromptConfigContextValue {
   setApiKeys(keys: Partial<ProviderApiKeys>): void;
   trustedWorkspaces: Record<string, boolean>;
   setTrustedWorkspace(path: string, trusted: boolean): void;
+  disableSkillShellExecution: boolean;
+  setDisableSkillShellExecution(disabled: boolean): void;
 }
 
 interface PromptPreferences {
@@ -41,6 +43,7 @@ interface PromptPreferences {
   reasoningEffort?: ReasoningEffort;
   providerApiKeys?: ProviderApiKeys;
   trustedWorkspaces?: Record<string, boolean>;
+  disableSkillShellExecution?: boolean;
 }
 
 const PromptConfigContext = createContext<PromptConfigContextValue | null>(null);
@@ -62,6 +65,7 @@ function getInitialConfig(): PromptPreferences {
       reasoningEffort: (preferences.reasoningEffort as ReasoningEffort) || "high",
       providerApiKeys: preferences.providerApiKeys || {},
       trustedWorkspaces: preferences.trustedWorkspaces || {},
+      disableSkillShellExecution: preferences.disableSkillShellExecution || false,
     };
   } catch (err: any) {
     return {
@@ -70,6 +74,7 @@ function getInitialConfig(): PromptPreferences {
       reasoningEffort: "high",
       providerApiKeys: {},
       trustedWorkspaces: {},
+      disableSkillShellExecution: false,
     };
   }
 }
@@ -107,6 +112,7 @@ export default function PromptConfigProvider({
   const [reasoningEffort, setCurrentReasoningEffort] = useState<ReasoningEffort>((initialConfig.reasoningEffort as ReasoningEffort) || "high");
   const [providerApiKeys, setCurrentApiKeys] = useState<ProviderApiKeys>(initialConfig.providerApiKeys || {});
   const [trustedWorkspaces, setTrustedWorkspaces] = useState<Record<string, boolean>>(initialConfig.trustedWorkspaces || {});
+  const [disableSkillShellExecution, setCurrentDisableSkillShellExecution] = useState<boolean>(initialConfig.disableSkillShellExecution || false);
 
   const setMode = useCallback((mode: Mode) => {
     setCurrentMode(mode);
@@ -139,9 +145,14 @@ export default function PromptConfigProvider({
     });
   }, []);
 
+  const setDisableSkillShellExecution = useCallback((disabled: boolean) => {
+    setCurrentDisableSkillShellExecution(disabled);
+    persistConfig({ disableSkillShellExecution: disabled });
+  }, []);
+
   const values = useMemo(
-    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace }),
-    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace],
+    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace, disableSkillShellExecution, setDisableSkillShellExecution }),
+    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace, disableSkillShellExecution, setDisableSkillShellExecution],
   );
   return (
     <PromptConfigContext.Provider value={values}>{children}</PromptConfigContext.Provider>

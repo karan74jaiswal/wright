@@ -10,7 +10,9 @@ import { appRouter } from "./index";
 const app = express();
 const port = Number(process.env.SESSION_SERVICE_PORT) || 3001;
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",");
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS || "http://localhost:3000"
+).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json({ limit: "1mb" }));
 
@@ -45,7 +47,6 @@ app.get("/", (_req, res) => {
   res.send("Session service is running");
 });
 
-
 const server = http.createServer(app);
 
 server.listen(port, () => {
@@ -63,7 +64,7 @@ const shutdown = async () => {
   } catch (e) {
     console.error("Failed to disconnect database:", e);
   }
-  setTimeout(() => process.exit(1), 10_000).unref();
+  process.exit(0);
 };
 
 process.on("SIGTERM", shutdown);

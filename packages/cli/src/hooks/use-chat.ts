@@ -1,4 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import * as fs from "fs";
+
+const logDebug = (msg: string) => {
+  try {
+    fs.appendFileSync(
+      "use-chat-debug.log",
+      `[${new Date().toISOString()}] ${msg}\n`,
+    );
+  } catch (e) {}
+};
 import { useSubscription } from "@trpc/tanstack-react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -61,19 +71,72 @@ export function useChat({
 
   // UI State
   const [status, setStatus] = useState<ChatStatus>("idle");
-  const [activeRequest, setActiveRequest] = useState<{
+  type ActiveRequestType = {
     message?: string;
     resume?: any;
     activeCwd?: string;
     isAutoResume?: boolean;
     timestamp?: number;
-  } | null>(null);
+    jobId?: string;
+  };
+  const [activeRequestState, setActiveRequestState] =
+    useState<ActiveRequestType | null>(null);
+  const activeRequestRef = useRef(activeRequestState);
+  const setActiveRequest = useCallback(
+    (
+      valOrUpdater:
+        | ActiveRequestType
+        | null
+        | ((prev: ActiveRequestType | null) => ActiveRequestType | null),
+    ) => {
+      const nextVal =
+        typeof valOrUpdater === "function"
+          ? valOrUpdater(activeRequestRef.current)
+          : valOrUpdater;
+      activeRequestRef.current = nextVal;
+      setActiveRequestState(nextVal);
+    },
+    [],
+  );
+  const activeRequest = activeRequestState;
 
   const hasAutoResumedRef = useRef(false);
 
   const cancelChatMutation = useMutation(
     trpc.chat.cancelChat.mutationOptions(),
   );
+  
+  const submitChatJobMutation = useMutation({
+    ...trpc.chat.submitChatJob.mutationOptions(),
+    onError: (err, variables) => {
+      if (
+        (err.message === "CACHE_MISS_RESYNC_REQUIRED" ||
+          err.message === "SESSION_CONFIG_NOT_SYNCED") &&
+        forceSync
+      ) {
+        console.log("[useChat] Cache miss in backend, forcing tools resync...");
+        forceSync()
+          .then(() => {
+            // Retry the mutation with the exact same variables
+            setTimeout(() => {
+              submitChatJobMutation.mutate(variables);
+            }, 0);
+          })
+          .catch((syncErr) => {
+            console.error("Failed to resync tools:", syncErr);
+            setStatus("error");
+          });
+        return;
+      }
+      
+      console.error("Mutation Error:", err);
+      toast.show({
+        variant: ToastVariant.ERROR,
+        message: err.message || "Failed to submit chat job",
+      });
+      setStatus("error");
+    },
+  });
 
   // Keep refs in sync
   useEffect(() => {
@@ -87,6 +150,13 @@ export function useChat({
   useEffect(() => {
     activeToolCallsRef.current = activeToolCalls;
   }, [activeToolCalls]);
+
+  useEffect(() => {
+    try {
+      fs.writeFileSync("use-chat-debug.log", "");
+      logDebug(`--- Session Started / Switched: ${sessionId} ---`);
+    } catch (e) {}
+  }, [sessionId]);
 
   // Sync incoming database history
   useEffect(() => {
@@ -128,30 +198,54 @@ export function useChat({
       if (lastMsg && lastMsg.role === "USER" && status === "idle") {
         hasAutoResumedRef.current = true;
         setStatus("streaming");
+        const newJobId = globalThis.crypto.randomUUID();
+        logDebug(`[auto-resume] Starting new job: ${newJobId}`);
         setActiveRequest({
           message: lastMsg.content,
           activeCwd: process.cwd(),
           isAutoResume: true,
+          jobId: newJobId,
+          timestamp: Date.now(),
+        });
+        submitChatJobMutation.mutate({
+          jobId: newJobId,
+          sessionId,
+          message: lastMsg.content,
+          activeCwd: process.cwd(),
+          isAutoResume: true,
+          toolsHash,
+          model: currentModel,
+          mode: currentMode,
+          reasoningEffort,
         });
       }
     }
-  }, [history, status]);
+  }, [history, status, sessionId, toolsHash]);
 
   // The Streaming Subscription
   const streamSub = useSubscription(
     trpc.chat.streamChat.subscriptionOptions(
       {
         sessionId,
-        model: currentModel,
-        mode: currentMode,
-        reasoningEffort,
-        providerApiKeys,
-        toolsHash,
-        ...(activeRequest || {}),
       },
+      // eslint-disable-next-line react-hooks/refs
       {
         enabled: !!activeRequest && !!sessionId,
         onData(event) {
+          logDebug(`[onData] Event: ${event.type} | JobId: ${event.jobId} | activeReq: ${activeRequestRef.current?.jobId}`);
+          console.log(
+            `[use-chat] Received event: ${event.type} (jobId: ${event.jobId}, activeRequest: ${activeRequestRef.current?.jobId})`,
+          );
+          
+          if (
+            activeRequestRef.current?.jobId &&
+            event.jobId &&
+            activeRequestRef.current.jobId !== event.jobId
+          ) {
+            logDebug(`[onData] Ignoring event ${event.type} because jobId ${event.jobId} !== ${activeRequestRef.current.jobId}`);
+            return;
+          }
+
           if (event.type === "text-delta") {
             setStreamedContent((prev) => prev + event.text);
           } else if (event.type === "reasoning-delta") {
@@ -196,7 +290,7 @@ export function useChat({
                 reasoningEffort,
                 reasoningDuration: 0,
                 duration: 0,
-                status: "COMPLETED",
+                status: "INTERRUPTED",
                 model: currentModel,
                 mode: currentMode,
                 toolCalls: hasToolCalls ? toolCallsObj : null,
@@ -210,12 +304,28 @@ export function useChat({
             setStreamedContent("");
             setStreamedReasoning("");
           } else if (event.type === "done") {
+            if (
+              activeRequestRef.current?.jobId &&
+              event.jobId &&
+              activeRequestRef.current.jobId !== event.jobId
+            )
+              return;
             queryClient
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
               .catch((e) => console.error("Failed to invalidate queries:", e))
               .finally(() => {
+                logDebug(`[done.finally] Executing for jobId: ${event.jobId}`);
+                if (
+                  activeRequestRef.current?.jobId &&
+                  event.jobId &&
+                  activeRequestRef.current.jobId !== event.jobId
+                ) {
+                  logDebug(`[done.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`);
+                  return;
+                }
+                logDebug(`[done.finally] Setting status to idle and activeRequest to null`);
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -223,12 +333,28 @@ export function useChat({
                 setStatus("idle");
               });
           } else if (event.type === "error") {
+            if (
+              activeRequestRef.current?.jobId &&
+              event.jobId &&
+              activeRequestRef.current.jobId !== event.jobId
+            )
+              return;
             queryClient
               .invalidateQueries(
                 trpc.session.getSession.queryOptions({ id: sessionId }),
               )
               .catch((e) => console.error("Failed to invalidate queries:", e))
               .finally(() => {
+                logDebug(`[error.finally] Executing for jobId: ${event.jobId}`);
+                if (
+                  activeRequestRef.current?.jobId &&
+                  event.jobId &&
+                  activeRequestRef.current.jobId !== event.jobId
+                ) {
+                  logDebug(`[error.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`);
+                  return;
+                }
+                logDebug(`[error.finally] Setting status to error and activeRequest to null`);
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -238,27 +364,6 @@ export function useChat({
           }
         },
         onError(err) {
-          if (
-            (err.message === "CACHE_MISS_RESYNC_REQUIRED" ||
-              err.message === "SESSION_CONFIG_NOT_SYNCED") &&
-            activeRequest &&
-            forceSync
-          ) {
-            console.log("[useChat] Cache miss in backend, forcing tools resync...");
-            forceSync()
-              .then(() => {
-                // Retry the request by updating the timestamp to trigger a new subscription
-                setActiveRequest((prev) =>
-                  prev ? { ...prev, timestamp: Date.now() } : null,
-                );
-              })
-              .catch((syncErr) => {
-                console.error("Failed to resync tools:", syncErr);
-                setStatus("error");
-              });
-            return; // Don't show toast or reset state yet
-          }
-
           console.error("Subscription Error:", err);
           toast.show({
             variant: ToastVariant.ERROR,
@@ -306,18 +411,36 @@ export function useChat({
       setHistory((prev) => [...prev, optimisticMsg]);
       setStatus("streaming");
       hasAutoResumedRef.current = true; // Prevent any auto-resume collisions
-      setActiveRequest({
+      const newJobId = globalThis.crypto.randomUUID();
+      logDebug(`[sendMessage] Starting new job: ${newJobId}`);
+      const newReq = {
         message: text,
         activeCwd: process.cwd(),
         isAutoResume: false,
         timestamp: Date.now(),
+        jobId: newJobId,
+      };
+      setActiveRequest(newReq);
+      activeRequestRef.current = newReq;
+
+      submitChatJobMutation.mutate({
+        jobId: newJobId,
+        sessionId,
+        message: text,
+        activeCwd: process.cwd(),
+        isAutoResume: false,
+        toolsHash,
+        model: currentModel,
+        mode: currentMode,
+        reasoningEffort,
       });
     },
-    [sessionId, status, currentModel, currentMode],
+    [sessionId, status, currentModel, currentMode, toolsHash],
   );
 
   const submitInterrupt = useCallback(
     (answerMap: Record<string, any> | any) => {
+      console.log(`[use-chat] submitInterrupt called with status=${status}`);
       if (status !== "interrupted") return;
 
       // Ensure answer is formatted as a Record mapping interrupt ID to answer.
@@ -379,9 +502,23 @@ export function useChat({
 
       setInterruptPayload(null);
       setStatus("streaming");
-      setActiveRequest({ resume: resumePayload, timestamp: Date.now() });
+      const newJobId = globalThis.crypto.randomUUID();
+      logDebug(`[submitInterrupt] Starting new job: ${newJobId}`);
+      const newReq = { resume: resumePayload, timestamp: Date.now(), jobId: newJobId };
+      setActiveRequest(newReq);
+      activeRequestRef.current = newReq;
+
+      submitChatJobMutation.mutate({
+        jobId: newJobId,
+        sessionId,
+        resume: resumePayload,
+        toolsHash,
+        model: currentModel,
+        mode: currentMode,
+        reasoningEffort,
+      });
     },
-    [status, interruptPayload],
+    [status, interruptPayload, sessionId, toolsHash],
   );
 
   const stop = useCallback(() => {

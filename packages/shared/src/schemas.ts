@@ -49,10 +49,12 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("done"),
     messageId: z.string().optional(),
+    jobId: z.string().optional(),
   }),
   z.object({
     type: z.literal("error"),
     message: z.string(),
+    jobId: z.string().optional(),
   }),
 ]);
 
@@ -69,6 +71,7 @@ export const chatRequestSchema = z.object({
   toolsHash: z.string().optional(),
   activeCwd: z.string().optional(),
   resume: z.unknown().optional(),
+  jobId: z.string().optional(),
   model: z.string().refine((val) => supportedModelIds.includes(val), {
     message: "Invalid or unsupported Model ID",
   }),

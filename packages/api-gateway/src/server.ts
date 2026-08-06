@@ -30,12 +30,17 @@ app.use(
       error: (err, _req, res) => {
         console.error("Proxy error (session-service):", err.message);
         if (res && "writeHead" in res) {
-          (res as http.ServerResponse).writeHead(502, {
-            "Content-Type": "application/json",
-          });
-          (res as http.ServerResponse).end(
-            JSON.stringify({ error: "Session service unavailable" }),
-          );
+          const serverRes = res as http.ServerResponse;
+          if (!serverRes.headersSent) {
+            serverRes.writeHead(502, {
+              "Content-Type": "application/json",
+            });
+            serverRes.end(
+              JSON.stringify({ error: "Session service unavailable" }),
+            );
+          } else {
+            serverRes.end();
+          }
         }
       },
     },
@@ -52,12 +57,17 @@ app.use(
       error: (err, _req, res) => {
         console.error("Proxy error (chat-service):", err.message);
         if (res && "writeHead" in res) {
-          (res as http.ServerResponse).writeHead(502, {
-            "Content-Type": "application/json",
-          });
-          (res as http.ServerResponse).end(
-            JSON.stringify({ error: "Chat service unavailable" }),
-          );
+          const serverRes = res as http.ServerResponse;
+          if (!serverRes.headersSent) {
+            serverRes.writeHead(502, {
+              "Content-Type": "application/json",
+            });
+            serverRes.end(
+              JSON.stringify({ error: "Chat service unavailable" }),
+            );
+          } else {
+            serverRes.end();
+          }
         }
       },
     },

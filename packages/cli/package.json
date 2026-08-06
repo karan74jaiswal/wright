@@ -16,7 +16,8 @@
     "@types/bun": "latest",
     "@types/react": "^19.2.17",
     "@wright/api-gateway": "workspace:*",
-    "@wright/database": "workspace:*"
+    "@wright/database": "workspace:*",
+    "ioredis": "^6.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"

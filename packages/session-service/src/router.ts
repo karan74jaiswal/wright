@@ -113,9 +113,9 @@ export const sessionRouter = router({
         return {
           ...session,
           messages: session.messages.map((m) => ({
-          ...m,
-          toolCalls: m.toolCalls as unknown,
-        })),
+            ...m,
+            toolCalls: m.toolCalls as unknown,
+          })),
         };
       } catch (error) {
         Sentry.captureException(error);
@@ -132,13 +132,19 @@ export const sessionRouter = router({
         sessionId: z.string(),
         enabledSkills: z.record(z.string(), z.any()),
         enabledMcps: z.record(z.string(), z.any()),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const { sessionId, enabledSkills, enabledMcps } = input;
-
-      const payloadString = JSON.stringify({ skills: enabledSkills, mcps: enabledMcps });
-      const hash = crypto.createHash("sha256").update(payloadString).digest("hex");
+      console.log(enabledMcps);
+      const payloadString = JSON.stringify({
+        skills: enabledSkills,
+        mcps: enabledMcps,
+      });
+      const hash = crypto
+        .createHash("sha256")
+        .update(payloadString)
+        .digest("hex");
       const redisKey = `tools:config_hash_${hash}`;
 
       try {

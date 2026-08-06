@@ -10,7 +10,7 @@ import NewSession from "./screens/new-session";
 import Session from "./screens/session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  httpBatchLink,
+  httpLink,
   httpSubscriptionLink,
   splitLink,
   createTRPCClient,
@@ -56,7 +56,7 @@ const trpcClient = createTRPCClient<AppRouter>({
         EventSource: EventSource as any,
         transformer: superjson,
       }),
-      false: httpBatchLink({ url, transformer: superjson }),
+      false: httpLink({ url, transformer: superjson }),
     }),
   ],
 });
