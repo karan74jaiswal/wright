@@ -3,6 +3,9 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
+  "bin": {
+    "wright": "src/index.tsx"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
@@ -13,7 +16,8 @@
     "@types/bun": "latest",
     "@types/react": "^19.2.17",
     "@wright/api-gateway": "workspace:*",
-    "@wright/database": "workspace:*"
+    "@wright/database": "workspace:*",
+    "ioredis": "^6.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -21,6 +25,8 @@
   "dependencies": {
     "@anscribe/mcp": "^1.0.1",
     "@anscribe/opentui": "^1.0.1",
+    "@langchain/mcp-adapters": "^1.1.3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@opentui/core": "^0.4.1",
     "@opentui/react": "^0.4.3",
     "@tanstack/react-query": "^5.101.2",
@@ -33,11 +39,13 @@
     "chalk": "^5.4.1",
     "date-fns": "^4.4.0",
     "eventsource": "^4.1.0",
+    "minimatch": "^10.2.6",
     "opentui-spinner": "^0.0.7",
     "pretty-ms": "^9.3.0",
     "react": "^19.2.7",
     "react-router": "^8.1.0",
     "superjson": "^2.2.6",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   }
 }

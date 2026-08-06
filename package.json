@@ -6,17 +6,19 @@
     "dev:session": "cd packages/session-service && bun run dev",
     "dev:chat": "cd packages/chat-service && bun run dev",
     "dev:gateway": "cd packages/api-gateway && bun run dev",
-    "dev:backend": "bun run dev:session & bun run dev:chat & bun run dev:gateway"
+    "dev:worker": "cd packages/worker-service && bun run dev",
+    "dev:backend": "WORKSPACE_ROOT=$(pwd) bun run dev:session & WORKSPACE_ROOT=$(pwd) bun run dev:chat & WORKSPACE_ROOT=$(pwd) bun run dev:gateway & WORKSPACE_ROOT=$(pwd) bun run dev:worker"
   },
   "workspaces": [
     "packages/*"
   ],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.6.0",
+    "@types/bun": "^1.3.14",
+    "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.7.0",
-    "typescript-eslint": "^8.62.1"
+    "globals": "^17.8.0",
+    "typescript-eslint": "^8.65.0"
   },
   "intent": {
     "skills": [

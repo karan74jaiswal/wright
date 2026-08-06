@@ -3,13 +3,16 @@ import express from "express";
 import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
+import { prisma as db } from "@wright/database/client";
 
 import { appRouter } from "./index";
 
 const app = express();
 const port = Number(process.env.SESSION_SERVICE_PORT) || 3001;
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",");
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS || "http://localhost:3000"
+).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json({ limit: "1mb" }));
 
@@ -26,6 +29,13 @@ app.use(
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
+    onError({ error, path }) {
+      if (error.code === "INTERNAL_SERVER_ERROR") {
+        Sentry.captureException(error, {
+          tags: { path: `/api/${path}` },
+        });
+      }
+    },
   }),
 );
 
@@ -37,9 +47,6 @@ app.get("/", (_req, res) => {
   res.send("Session service is running");
 });
 
-// Sentry error handler should be after all controllers/middlewares
-Sentry.setupExpressErrorHandler(app);
-
 const server = http.createServer(app);
 
 server.listen(port, () => {
@@ -47,13 +54,17 @@ server.listen(port, () => {
 });
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log("Session service shutting down gracefully...");
   server.close(() => {
     console.log("Session service stopped.");
-    process.exit(0);
   });
-  setTimeout(() => process.exit(1), 10_000).unref();
+  try {
+    await db.$disconnect();
+  } catch (e) {
+    console.error("Failed to disconnect database:", e);
+  }
+  process.exit(0);
 };
 
 process.on("SIGTERM", shutdown);

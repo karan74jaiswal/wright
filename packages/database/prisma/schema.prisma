@@ -34,9 +34,10 @@ model Session {
   id        String    @id @default(cuid())
   userId    String
   title     String
-  cwd       String?
-  messages  Message[]
-  createdAt DateTime  @default(now())
+  cwd           String?
+  toolsHash     String?   // CAS hash of the complete tool catalog in Redis
+  messages      Message[]
+  createdAt     DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   @@index([userId])

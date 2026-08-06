@@ -9,6 +9,8 @@ import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
 import { useToast } from "../providers/toast";
 import { ToastVariant } from "../providers/toast/types";
 import { usePromptConfig } from "../providers/prompt-config";
+import { useSkills } from "../providers/skills";
+import { useMcp } from "../providers/mcp";
 
 const newSessionsStateSchema = z.object({
   message: z.string(),
@@ -28,8 +30,8 @@ const NewSession = () => {
   const { currentMode, currentModel, reasoningEffort, providerApiKeys } =
     usePromptConfig();
 
-  //   const [msgs, setMsgs] = useState([]);
-  //   const [loading, setLoading] = useState(false);
+  const { skills: discoveredSkills, isLoading: isSkillsLoading } = useSkills();
+  const { servers, isLoading: isMcpLoading } = useMcp();
 
   useEffect(() => {
     if (!state)
@@ -42,9 +44,13 @@ const NewSession = () => {
   const createSessionMutation = useMutation(
     trpc.session.createSession.mutationOptions(),
   );
+  const syncConfigMutation = useMutation(
+    trpc.session.syncSessionConfig.mutationOptions(),
+  );
 
   useEffect(() => {
-    if (!state || hasStartedRef.current) return;
+    if (!state || hasStartedRef.current || isSkillsLoading || isMcpLoading)
+      return;
     hasStartedRef.current = true;
 
     createSessionMutation.mutate(
@@ -59,12 +65,36 @@ const NewSession = () => {
         },
       },
       {
-        onSuccess: (session) => {
-          // toast.show({
-          //   variant: ToastVariant.SUCCESS,
-          //   message: "New Session Created",
-          // });
-          // console.log(session);
+        onSuccess: async (session) => {
+          try {
+            await syncConfigMutation.mutateAsync({
+              sessionId: session.id,
+              enabledSkills: Object.fromEntries(
+                Array.from(discoveredSkills.entries()).map(([key, skill]) => [
+                  key,
+                  {
+                    name: skill.name,
+                    path: skill.skillFilePath,
+                    description: skill.frontmatter.description || "No description provided.",
+                  },
+                ])
+              ),
+              enabledMcps: Object.fromEntries(
+                Array.from(servers.entries()).map(([key, server]) => [
+                  key,
+                  {
+                    name: server.name,
+                    config: server.config,
+                    source: server.source,
+                    tools: server.tools || [],
+                  },
+                ])
+              ),
+            });
+          } catch (e) {
+            console.error("Failed to sync session config", e);
+          }
+
           navigate(`/sessions/${session.id}`, {
             state: { session },
             replace: true,
@@ -86,9 +116,14 @@ const NewSession = () => {
     state,
     toast,
     createSessionMutation,
+    syncConfigMutation,
+    discoveredSkills,
+    servers,
     currentModel,
     currentMode,
     reasoningEffort,
+    isSkillsLoading,
+    isMcpLoading,
     providerApiKeys,
   ]);
 

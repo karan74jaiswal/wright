@@ -19,6 +19,13 @@ export {
   chatRequestSchema,
 } from "./schemas";
 
-export type { ToolCall, BaseMessage, ChatStreamEvent, ChatRequest } from "./schemas";
+export type {
+  ToolCall,
+  BaseMessage,
+  ChatStreamEvent,
+  ChatRequest,
+} from "./schemas";
 
 export * from "./trpc";
+
+export { findEnvFile, loadEnv } from "./env";

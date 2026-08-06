@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect } from "react";
 import { Outlet } from "react-router";
 import { TextAttributes } from "@opentui/core";
 import KeyBoardProvider from "../providers/keyboard";
@@ -8,6 +8,8 @@ import ThemedRoot from "./themed-root";
 import ThemeProvider from "../providers/theme";
 import PromptConfigProvider, { usePromptConfig } from "../providers/prompt-config";
 import TrustWorkspaceScreen from "../screens/trust-workspace";
+import McpProvider from "../providers/mcp";
+import SkillsProvider from "../providers/skills";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -49,6 +51,19 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 function InnerLayout() {
   const { trustedWorkspaces } = usePromptConfig();
 
+  useEffect(() => {
+    // Some shells (like Zsh) override the terminal title during preexec.
+    // By setting it inside a React effect, we ensure it overrides the shell
+    // AFTER OpenTUI has fully initialized the alternate screen buffer.
+    process.stdout.write("\x1b]0;wright\x07");
+    
+    // A secondary timeout just in case the terminal emulator is slow to switch buffers
+    const timer = setTimeout(() => {
+      process.stdout.write("\x1b]0;wright\x07");
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   if (!trustedWorkspaces[process.cwd()]) {
     return <TrustWorkspaceScreen />;
   }
@@ -59,7 +74,11 @@ function InnerLayout() {
         <ToastProvider>
           <ErrorBoundary>
             <ThemedRoot>
-              <Outlet />
+              <SkillsProvider>
+                <McpProvider>
+                  <Outlet />
+                </McpProvider>
+              </SkillsProvider>
             </ThemedRoot>
           </ErrorBoundary>
         </ToastProvider>
