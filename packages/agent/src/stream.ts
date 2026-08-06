@@ -25,6 +25,12 @@ export async function* streamAgent(
   } = input;
 
   let startTime = Date.now();
+  const t0 = performance.now();
+  const logTime = (...args: any[]) => {
+    const ms = (performance.now() - t0).toFixed(0);
+    const jobIdStr = (input as any).jobId ? `[Job ${(input as any).jobId.toString().slice(-4)}] ` : "";
+    console.log(`${jobIdStr}[+${ms}ms]`, ...args);
+  };
   let fullText = "";
   let fullReasoning = "";
   let reasoningDurationMs: number | null = null;
@@ -65,18 +71,18 @@ export async function* streamAgent(
   };
 
   try {
-    console.log("streamAgent: fetching session from db...", sessionId);
+    logTime("streamAgent: fetching session from db...", sessionId);
     const session = await db.session.findUnique({
       where: { id: sessionId },
       select: { cwd: true },
     });
-    console.log("streamAgent: session found", session?.cwd);
+    logTime("streamAgent: session found", session?.cwd);
 
     // If we can't find session cwd (e.g. invalid session), fallback to process.cwd() or activeCwd
     const sessionCwd = session?.cwd || activeCwd || process.cwd();
 
     if (message && !isAutoResume) {
-      console.log("streamAgent: creating message record...");
+      logTime("streamAgent: creating message record...");
       await db.message.create({
         data: {
           sessionId,
@@ -87,19 +93,19 @@ export async function* streamAgent(
           status: MessageStatus.COMPLETED,
         },
       });
-      console.log("streamAgent: message record created");
+      logTime("streamAgent: message record created");
     }
 
-    console.log("streamAgent: building newMessages...");
+    logTime("streamAgent: building newMessages...");
     const newMessages = message ? [new HumanMessage(message)] : [];
-    console.log("streamAgent: newMessages built", newMessages);
-    console.log("streamAgent: creating agent graph...");
+    logTime("streamAgent: newMessages built", newMessages);
+    logTime("streamAgent: creating agent graph...");
     graph = createAgentGraph();
-    console.log("streamAgent: graph created");
+    logTime("streamAgent: graph created");
 
     let mcpTools: any[] = [];
     if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
-      console.log("streamAgent: loading mcp tools...");
+      logTime("streamAgent: loading mcp tools...");
       try {
         const { createMcpProxyTools } = await import("./lib/tools");
         for (const [serverName, serverPayload] of Object.entries(
@@ -114,7 +120,7 @@ export async function* streamAgent(
       }
     }
 
-    console.log("streamAgent: setting up config...");
+    logTime("streamAgent: setting up config...");
     config = {
       configurable: {
         thread_id: sessionId,
@@ -130,10 +136,10 @@ export async function* streamAgent(
       },
     };
 
-    console.log("streamAgent: getting current state...");
+    logTime("streamAgent: getting current state...");
     const currentState = await graph.getState(config);
     const hasState = Object.keys(currentState.values).length > 0;
-    console.log("streamAgent: hasState", hasState);
+    logTime("streamAgent: hasState", hasState);
 
     const runInput = (
       resume
@@ -143,18 +149,28 @@ export async function* streamAgent(
           : null
     ) as any;
 
-    console.log("streamAgent: streaming events...");
+    logTime("streamAgent: streaming events...");
     const eventStream = (await graph.streamEvents(runInput, {
       version: "v3",
       ...config,
       signal,
     })) as unknown as AsyncGenerator<any, void, unknown>;
-    console.log("streamAgent: event stream created");
+    logTime("streamAgent: event stream created");
 
     const savedMessageIds = new Set<string>();
+    
+    // Performance optimization: Pre-load known message IDs to prevent O(N) sequential deduplication queries
+    // on stream resume, as LangGraph will emit the entire historical state in the first 'values' event.
+    const existingMessages = await db.message.findMany({
+      where: { sessionId },
+      select: { id: true },
+    });
+    for (const m of existingMessages) {
+      savedMessageIds.add(m.id);
+    }
 
     for await (const event of eventStream) {
-      console.log("streamAgent: got event (raw)", JSON.stringify(event));
+      logTime("streamAgent: got event (raw)", JSON.stringify(event));
       if (signal?.aborted) break;
 
       const method = event.method;
@@ -209,77 +225,70 @@ export async function* streamAgent(
           savedMessageIds.add(msgId);
           const msgType = msg.getType ? msg.getType() : msg.type;
 
-          // Cross-run deduplication: Check if this message was already persisted in a prior run
-          const existingMsg = await db.message.findUnique({
-            where: { id: msgId },
-          });
+          if (msgType === "ai") {
+            const elapsedMs = Date.now() - startTime;
+            const contentToSave =
+              typeof msg.content === "string"
+                ? msg.content
+                : JSON.stringify(msg.content);
+            fullText = contentToSave;
 
-          if (!existingMsg) {
-            if (msgType === "ai") {
-              const elapsedMs = Date.now() - startTime;
-              const contentToSave =
-                typeof msg.content === "string"
-                  ? msg.content
-                  : JSON.stringify(msg.content);
-              fullText = contentToSave;
-
-              let toolCallsToSave = null;
-              if (msg.tool_calls && msg.tool_calls.length > 0) {
-                toolCallsToSave = msg.tool_calls;
-              }
-
-              try {
-                await db.message.create({
-                  data: {
-                    id: msgId,
-                    sessionId,
-                    role: Role.ASSISTANT,
-                    content: contentToSave || "",
-                    reasoning: fullReasoning || null,
-                    reasoningEffort: reasoningEffort || null,
-                    reasoningDuration: reasoningDurationMs,
-                    toolCalls: toolCallsToSave,
-                    model,
-                    mode: mode as Mode,
-                    status: MessageStatus.COMPLETED,
-                    duration: elapsedMs,
-                  },
-                });
-              } catch (dbErr) {
-                console.error("Failed to persist AI message:", dbErr);
-              }
+            let toolCallsToSave = null;
+            if (msg.tool_calls && msg.tool_calls.length > 0) {
+              toolCallsToSave = msg.tool_calls;
             }
 
-            if (msgType === "tool") {
-              const contentToSave =
-                typeof msg.content === "string"
-                  ? msg.content
-                  : JSON.stringify(msg.content);
-              const toolCallId = msg.tool_call_id || "unknown";
-
-              try {
-                await db.message.create({
-                  data: {
-                    id: msgId,
-                    sessionId,
-                    role: Role.TOOL,
-                    content: contentToSave,
-                    toolCallId,
-                    model,
-                    mode: mode as Mode,
-                    status: MessageStatus.COMPLETED,
-                  },
-                });
-              } catch (dbErr) {
-                console.error("Failed to persist tool message:", dbErr);
-              }
-
-              yield {
-                type: "tool-result",
-                toolCallId,
-                result: contentToSave,
-              } as ChatStreamEvent;
+            try {
+              await db.message.create({
+                data: {
+                  id: msgId,
+                  sessionId,
+                  role: Role.ASSISTANT,
+                  content: contentToSave || "",
+                  reasoning: fullReasoning || null,
+                  reasoningEffort: reasoningEffort || null,
+                  reasoningDuration: reasoningDurationMs,
+                  toolCalls: toolCallsToSave,
+                  model,
+                  mode: mode as Mode,
+                  status: MessageStatus.COMPLETED,
+                  duration: elapsedMs,
+                },
+              });
+            } catch (dbErr) {
+              console.error("Failed to persist AI message:", dbErr);
             }
+          }
+
+          if (msgType === "tool") {
+            const contentToSave =
+              typeof msg.content === "string"
+                ? msg.content
+                : JSON.stringify(msg.content);
+            const toolCallId = msg.tool_call_id || "unknown";
+
+            try {
+              await db.message.create({
+                data: {
+                  id: msgId,
+                  sessionId,
+                  role: Role.TOOL,
+                  content: contentToSave,
+                  toolCallId,
+                  model,
+                  mode: mode as Mode,
+                  status: MessageStatus.COMPLETED,
+                },
+              });
+            } catch (dbErr) {
+              console.error("Failed to persist tool message:", dbErr);
+            }
+
+            yield {
+              type: "tool-result",
+              toolCallId,
+              result: contentToSave,
+            } as ChatStreamEvent;
           }
         }
       }

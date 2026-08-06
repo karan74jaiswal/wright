@@ -6,7 +6,7 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
 import { appRouter } from "./index";
 import { prisma as db } from "@wright/database/client";
-import { setupCheckpointer } from "@wright/agent";
+import { setupCheckpointer, shutdownCheckpointer } from "@wright/agent";
 import { setupBullBoard } from "./dashboard";
 
 const app = express();
@@ -77,6 +77,11 @@ const shutdown = async () => {
   server.close(() => {
     console.log("Chat service stopped.");
   });
+  try {
+    await shutdownCheckpointer();
+  } catch (e) {
+    console.error("Failed to shutdown checkpointer:", e);
+  }
   try {
     await db.$disconnect();
   } catch (e) {

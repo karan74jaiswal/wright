@@ -119,11 +119,11 @@ export const chatRouter = router({
           const parsedEvent = JSON.parse(event);
           if (parsedEvent.type === "done") {
             yield parsedEvent;
-            continue;
+            break;
           }
           if (parsedEvent.type === "error") {
             yield parsedEvent;
-            continue;
+            break;
           }
 
           yield parsedEvent;

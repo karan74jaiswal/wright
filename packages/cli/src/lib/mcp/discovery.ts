@@ -40,7 +40,6 @@ export async function discoverMcpServers(
       path: path.join(homeDir, ".wright", "mcp.json"),
       scope: "global" as const,
     },
-    { path: path.join(homeDir, ".mcp.json"), scope: "global" as const },
   ];
 
   const servers = new Map<string, DiscoveredServer>();

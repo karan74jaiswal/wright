@@ -33,9 +33,15 @@ export function setupCheckpointer(): Promise<void> {
 
 export async function shutdownCheckpointer(): Promise<void> {
   if (pool) {
-    await pool.end();
+    const p = pool;
     pool = null;
     checkpointer = null;
     setupPromise = null;
+    
+    try {
+      await p.end();
+    } catch (e) {
+      console.error("Error during checkpointer shutdown:", e);
+    }
   }
 }

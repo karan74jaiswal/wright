@@ -78,10 +78,19 @@ export const sessionRouter = router({
 
       return {
         ...session,
-        messages: session.messages.map((m) => ({
-          ...m,
-          toolCalls: m.toolCalls as unknown,
-        })),
+        messages: session.messages.map((m) => {
+          let content = m.content;
+          if (m.role === "TOOL" && content.length > 1000) {
+            content =
+              content.slice(0, 1000) +
+              "\n... [Content truncated for UI performance]";
+          }
+          return {
+            ...m,
+            content,
+            toolCalls: m.toolCalls as unknown,
+          };
+        }),
       };
     }),
 
@@ -136,7 +145,7 @@ export const sessionRouter = router({
     )
     .mutation(async ({ input }) => {
       const { sessionId, enabledSkills, enabledMcps } = input;
-      console.log(enabledMcps);
+      // console.log(enabledMcps);
       const payloadString = JSON.stringify({
         skills: enabledSkills,
         mcps: enabledMcps,

@@ -1,6 +1,6 @@
 import { Queue, Worker, Job } from "bullmq";
 import { redis, createRedisClient } from "@wright/redis";
-import { streamAgent } from "@wright/agent";
+import { streamAgent, shutdownCheckpointer } from "@wright/agent";
 import type { ChatRequest } from "@wright/shared";
 import { EventEmitter } from "events";
 
@@ -74,6 +74,11 @@ export function startWorker() {
   const shutdown = async () => {
     console.log("Worker shutting down gracefully...");
     await worker.close();
+    try {
+      await shutdownCheckpointer();
+    } catch (e) {
+      console.error("Failed to shutdown checkpointer:", e);
+    }
     console.log("Worker stopped.");
     process.exit(0);
   };

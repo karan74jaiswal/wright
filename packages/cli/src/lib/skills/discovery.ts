@@ -38,7 +38,6 @@ export async function discoverSkills(
 
   // Ordered from lowest to highest priority so later discoveries overwrite earlier ones
   const searchPaths = [
-    { path: path.join(homeDir, ".agents", "skills"), scope: "global" as const },
     { path: path.join(homeDir, ".wright", "skills"), scope: "global" as const },
     {
       path: path.join(workspaceRoot, ".agents", "skills"),
