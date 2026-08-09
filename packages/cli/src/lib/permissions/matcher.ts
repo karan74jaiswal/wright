@@ -19,21 +19,20 @@ export function matchRule(pattern: string, actual: string, isCommand: boolean = 
 
   if (pattern === actual) return true;
 
+  if (isCommand) {
+    // Commands require strict exact matches (which was checked above).
+    // Wildcards are fundamentally unsafe for shell execution due to arbitrary arg injection.
+    return false;
+  }
+
   // Simple wildcard catch-all for extreme cases
   if (pattern === "*") return true;
 
-  // Use minimatch for any pattern containing wildcards
-  if (pattern.includes("*") || pattern.includes("?")) {
-    if (isCommand) {
-      // Command-native wildcards: * matches anything including slashes
-      const regexStr = pattern
-        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-        .replace(/\*/g, ".*")
-        .replace(/\?/g, ".");
-      return new RegExp(`^${regexStr}$`).test(actual);
-    }
-    return minimatch(actual, pattern, { dot: true });
-  }
-
-  return false;
+  // File matching: route all remaining non-exact patterns through restricted minimatch
+  return minimatch(actual, pattern, { 
+    dot: true,
+    nonegate: true, 
+    nocomment: true,
+    noext: true
+  });
 }

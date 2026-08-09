@@ -21,8 +21,8 @@ const largePayloadParser = express.json({ limit: "50mb" });
 const standardPayloadParser = express.json({ limit: "2mb" });
 
 app.use((req, res, next) => {
-  // Only allow large payloads for the EXACT tRPC submission route
-  if (req.path === "/api/chat.submitChatJob") {
+  // Only allow large payloads for the EXACT tRPC submission route (including batched variants)
+  if (/(?:\/|,)chat\.submitChatJob(?:,|$)/.test(req.path)) {
     return largePayloadParser(req, res, next);
   }
   return standardPayloadParser(req, res, next);

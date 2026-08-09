@@ -41,13 +41,7 @@ export function ToolApprovalPrompt({
     let wildcardDesc = "";
     let wildcard: string | undefined = undefined;
 
-    if (pendingApproval.toolName === "run_command" && pendingApproval.target) {
-      const parts = pendingApproval.target.split(" ");
-      if (parts.length > 1) {
-        wildcard = `${parts[0]} *`;
-        wildcardDesc = `Allow all '${parts[0]}' commands`;
-      }
-    } else if (
+    if (
       pendingApproval.toolName === "invoke_mcp" &&
       pendingApproval.target
     ) {
