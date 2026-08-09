@@ -1,4 +1,7 @@
 import "./env";
 import { startWorker } from "./worker";
 
-startWorker().catch(console.error);
+startWorker().catch((err) => {
+  console.error("Worker failed to start:", err);
+  process.exit(1);
+});

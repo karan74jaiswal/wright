@@ -16,8 +16,17 @@ const ALLOWED_ORIGINS = (
   process.env.CORS_ORIGINS || "http://localhost:3000"
 ).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
-app.use("/api", express.json({ limit: "50mb" }));
-app.use(express.json({ limit: "2mb" }));
+
+const largePayloadParser = express.json({ limit: "50mb" });
+const standardPayloadParser = express.json({ limit: "2mb" });
+
+app.use((req, res, next) => {
+  // Only allow large payloads for the EXACT tRPC submission route
+  if (req.path === "/api/chat.submitChatJob") {
+    return largePayloadParser(req, res, next);
+  }
+  return standardPayloadParser(req, res, next);
+});
 
 const createContext = ({
   req,
@@ -53,7 +62,9 @@ app.get("/", (_req, res) => {
 const ENABLE_DASHBOARD = process.env.ENABLE_BULL_DASHBOARD === "true"; 
 if (ENABLE_DASHBOARD) {
   app.use("/admin/queues", (req, res, next) => {
-    if (req.hostname !== "localhost" && req.hostname !== "127.0.0.1") {
+    const remoteIp = req.socket.remoteAddress;
+    const isLocal = remoteIp === "127.0.0.1" || remoteIp === "::1" || remoteIp === "::ffff:127.0.0.1";
+    if (!isLocal) {
       return res.status(403).send("Dashboard is restricted to local interface.");
     }
     const b64auth = (req.headers.authorization || "").split(" ")[1] || "";

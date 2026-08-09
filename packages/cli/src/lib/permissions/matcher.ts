@@ -8,7 +8,6 @@ import { minimatch } from "minimatch";
  */
 export function matchRule(pattern: string, actual: string, isCommand: boolean = false): boolean {
   if (!pattern || !actual) return false;
-  if (pattern === actual) return true;
 
   if (isCommand) {
     // Reject shell control operators in the actual target to prevent chaining bypasses via pattern match
@@ -17,6 +16,8 @@ export function matchRule(pattern: string, actual: string, isCommand: boolean = 
       return false;
     }
   }
+
+  if (pattern === actual) return true;
 
   // Simple wildcard catch-all for extreme cases
   if (pattern === "*") return true;
