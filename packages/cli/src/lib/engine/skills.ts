@@ -2,6 +2,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import type { DiscoveredSkill } from "../skills/types";
+import { PermissionManager } from "../permissions";
 
 const execAsync = promisify(exec);
 
@@ -11,7 +12,7 @@ export async function executeSkill(
   activeCwd: string,
   skills?: Map<string, DiscoveredSkill>,
   sessionId: string = "default-session",
-  disableSkillShellExecution: boolean = false,
+  disableSkillShellExecution: boolean = true,
 ): Promise<string> {
   if (!skills) return `Error: Skills map not provided.`;
 
@@ -36,13 +37,13 @@ export async function executeSkill(
   // 1. Substitute Environment Variables (Supporting both standard CLAUDE_ and our WRIGHT_ aliases)
   rendered = rendered.replace(
     /\$\{(?:CLAUDE|WRIGHT)_SKILL_DIR\}/g,
-    skill.sourcePath,
+    () => skill.sourcePath,
   );
   rendered = rendered.replace(
     /\$\{(?:CLAUDE|WRIGHT)_PROJECT_DIR\}/g,
-    activeCwd,
+    () => activeCwd,
   );
-  rendered = rendered.replace(/\$\{(?:CLAUDE|WRIGHT)_SESSION_ID\}/g, sessionId);
+  rendered = rendered.replace(/\$\{(?:CLAUDE|WRIGHT)_SESSION_ID\}/g, () => sessionId);
 
   // 2. Substitute Arguments
   // $ARGUMENTS[N]
@@ -66,7 +67,7 @@ export async function executeSkill(
 
   // $ARGUMENTS
   const hasArgumentsPlaceholder = rendered.includes("$ARGUMENTS");
-  rendered = rendered.replace(/\$ARGUMENTS(?!\.)(?!\[)/g, argString);
+  rendered = rendered.replace(/\$ARGUMENTS(?!\.)(?!\[)/g, () => argString);
 
   // Custom $ARGUMENTS.key for backwards compatibility
   rendered = rendered.replace(/\$ARGUMENTS\.([a-zA-Z0-9_]+)/g, (match, key) => {
@@ -87,20 +88,6 @@ export async function executeSkill(
 
   // 3. Evaluate Dynamic Context Injection (Shell Execution)
 
-  // Basic heuristic blocklist for destructive commands during preprocessing phase
-  const isCommandSafe = (cmd: string) => {
-    const dangerousPatterns = [
-      /\brm\s+-r/i,
-      /\bmkfs\b/i,
-      /\bdd\s+if=/i,
-      />\s*\/dev\//i,
-      /\bmv\s+.*?\s+\//i,
-      /\bchmod\s+-R\b/i,
-      /\bchown\s+-R\b/i,
-    ];
-    return !dangerousPatterns.some((pattern) => pattern.test(cmd));
-  };
-
   // Inline: !`command` (only at start of line or after whitespace)
   const inlineRegex = /(^|\s)!`([^`]+)`/g;
   let match;
@@ -119,21 +106,23 @@ export async function executeSkill(
     if (disableSkillShellExecution) {
       rendered = rendered.replace(
         matchStr,
-        `${prefix}[shell command execution disabled by policy]`,
+        () => `${prefix}[shell command execution disabled by policy]`,
       );
       continue;
     }
-    if (!isCommandSafe(cmd)) {
+    
+    const checkResult = await PermissionManager.check("run_command", cmd, activeCwd, sessionId);
+    if (!checkResult.allowed) {
       rendered = rendered.replace(
         matchStr,
-        `${prefix}[shell command execution disabled due to security risk]`,
+        () => `${prefix}[shell command execution blocked. Explicit 'run_command' permission required.]`,
       );
       continue;
     }
     try {
       const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd });
       const output = (stdout || stderr || "").trim();
-      rendered = rendered.replace(matchStr, `${prefix}${output}`);
+      rendered = rendered.replace(matchStr, () => `${prefix}${output}`);
     } catch (err: any) {
       const output = (
         (err && err.stdout) ||
@@ -141,7 +130,7 @@ export async function executeSkill(
         (err && err.message) ||
         ""
       ).trim();
-      rendered = rendered.replace(matchStr, `${prefix}${output}`);
+      rendered = rendered.replace(matchStr, () => `${prefix}${output}`);
     }
   }
 
@@ -157,14 +146,16 @@ export async function executeSkill(
     if (disableSkillShellExecution) {
       rendered = rendered.replace(
         matchStr,
-        `[shell command execution disabled by policy]`,
+        () => `[shell command execution disabled by policy]`,
       );
       continue;
     }
-    if (!isCommandSafe(cmd)) {
+    
+    const checkResult = await PermissionManager.check("run_command", cmd, activeCwd, sessionId);
+    if (!checkResult.allowed) {
       rendered = rendered.replace(
         matchStr,
-        `[shell command execution disabled due to security risk]`,
+        () => `[shell command execution blocked. Explicit 'run_command' permission required.]`,
       );
       continue;
     }
@@ -172,7 +163,7 @@ export async function executeSkill(
       const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd });
       const output = (stdout || stderr || "").trim();
 
-      rendered = rendered.replace(matchStr, output);
+      rendered = rendered.replace(matchStr, () => output);
     } catch (err: any) {
       const output = (
         (err && err.stdout) ||
@@ -180,7 +171,7 @@ export async function executeSkill(
         (err && err.message) ||
         ""
       ).trim();
-      rendered = rendered.replace(matchStr, output);
+      rendered = rendered.replace(matchStr, () => output);
     }
   }
 

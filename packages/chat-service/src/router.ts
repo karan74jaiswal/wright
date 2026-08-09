@@ -20,7 +20,9 @@ streamEmitter.setMaxListeners(1000); // Support up to 1000 concurrent listeners
 const globalSubClient = createRedisClient();
 globalSubClient.psubscribe("chat_stream:*").catch(console.error);
 globalSubClient.on("pmessage", (pattern, channel, message) => {
-  console.log(`[Pub/Sub] Received message on channel ${channel}:`, message);
+  if (process.env.DEBUG === "true") {
+    console.log(`[Pub/Sub] Received message on channel ${channel}:`, message);
+  }
   streamEmitter.emit(channel, message);
 });
 
@@ -77,9 +79,9 @@ export const chatRouter = router({
   streamChat: publicProcedure
     .use(chatValidatorMiddleware)
     .use(sessionValidatorMiddleware)
-    .input(z.object({ sessionId: z.string() }))
+    .input(z.object({ sessionId: z.string(), jobId: z.string() }))
     .subscription(async function* ({ input, signal }) {
-      const channel = `chat_stream:${input.sessionId}`;
+      const channel = `chat_stream:${input.sessionId}:${input.jobId}`;
       
       const eventQueue: string[] = [];
       let resolveNext: (() => void) | null = null;
@@ -93,6 +95,10 @@ export const chatRouter = router({
       };
 
       streamEmitter.on(channel, onMessage);
+
+      // Signal subscriber readiness
+      await redis.setex(`chat_ready:${input.sessionId}:${input.jobId}`, 3600, "READY");
+      await redis.publish(`chat_ready_pubsub:${input.sessionId}:${input.jobId}`, "READY");
 
       if (signal) {
         signal.addEventListener("abort", () => {
@@ -180,6 +186,11 @@ export const chatRouter = router({
       const resolvedMcps = parsedTools.mcps || {};
 
       const reqId = input.jobId || crypto.randomUUID();
+
+      // Clear ready state and cancel state
+      await redis.del(`chat_ready:${input.sessionId}:${reqId}`);
+      await redis.del(`chat_cancel_state:${input.sessionId}:${reqId}`);
+
       const agentInput = {
         ...input,
         jobId: reqId,
@@ -187,21 +198,21 @@ export const chatRouter = router({
         mcpServers: resolvedMcps,
       };
 
-      // Add to BullMQ with a slight delay to allow the frontend SSE to connect 
-      // before the worker starts processing and publishing events to Pub/Sub.
+      // Add to BullMQ with no delay; the worker will wait for the explicit READY handshake via Pub/Sub or Redis
       const job = await chatQueue.add("chat-job", agentInput, {
         jobId: reqId,
         removeOnComplete: true,
-        delay: 500,
       });
       return { jobId: job.id };
     }),
 
-  cancelChat: publicProcedure
-    .input(z.object({ sessionId: z.string() }))
+    cancelChat: publicProcedure
+    .input(z.object({ sessionId: z.string(), jobId: z.string() }))
     .mutation(async ({ input }) => {
+      // Persist cancellation so worker doesn't start if it was queued
+      await redis.setex(`chat_cancel_state:${input.sessionId}:${input.jobId}`, 3600, "CANCEL");
       // Publish cancellation event to the worker processing this session
-      await redis.publish(`chat_cancel:${input.sessionId}`, "CANCEL");
+      await redis.publish(`chat_cancel:${input.sessionId}:${input.jobId}`, "CANCEL");
       return { success: true };
     }),
 });

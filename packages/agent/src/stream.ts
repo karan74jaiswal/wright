@@ -98,7 +98,7 @@ export async function* streamAgent(
 
     logTime("streamAgent: building newMessages...");
     const newMessages = message ? [new HumanMessage(message)] : [];
-    logTime("streamAgent: newMessages built", newMessages);
+    logTime("streamAgent: newMessages built", newMessages.length);
     logTime("streamAgent: creating agent graph...");
     graph = createAgentGraph();
     logTime("streamAgent: graph created");
@@ -170,7 +170,11 @@ export async function* streamAgent(
     }
 
     for await (const event of eventStream) {
-      logTime("streamAgent: got event (raw)", JSON.stringify(event));
+      if (process.env.DEBUG === "true") {
+        logTime("streamAgent: got event (raw)", JSON.stringify(event));
+      } else {
+        logTime("streamAgent: got event", event.method || "unknown");
+      }
       if (signal?.aborted) break;
 
       const method = event.method;

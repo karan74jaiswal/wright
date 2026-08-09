@@ -15,10 +15,6 @@ export async function executeClientTool(
   activeCwd: string
 ): Promise<string> {
   try {
-    // Automatically resolve relative paths against activeCwd
-    if (args && args.path) {
-      args.path = path.resolve(activeCwd, args.path);
-    }
 
     switch (toolName) {
       case "read_file":

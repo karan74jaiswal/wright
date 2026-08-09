@@ -11,7 +11,7 @@ const workerCancelEmitter = new EventEmitter();
 workerCancelEmitter.setMaxListeners(1000);
 
 const globalCancelSubClient = createRedisClient();
-globalCancelSubClient.psubscribe("chat_cancel:*").catch(console.error);
+globalCancelSubClient.psubscribe("chat_cancel:*", "chat_ready_pubsub:*").catch(console.error);
 globalCancelSubClient.on("pmessage", (pattern, channel, message) => {
   workerCancelEmitter.emit(channel, message);
 });
@@ -29,8 +29,32 @@ export function startWorker() {
       const { sessionId } = input;
       console.log(`Processing job ${job.id} for session ${sessionId}...`);
 
-      const channel = `chat_stream:${sessionId}`;
-      const cancelChannel = `chat_cancel:${sessionId}`;
+      const cancelState = await redis.get(`chat_cancel_state:${sessionId}:${input.jobId}`);
+      if (cancelState === "CANCEL") {
+        console.log(`Job ${job.id} was cancelled before execution started.`);
+        return;
+      }
+
+      // Explicit handshake: Wait up to 5 seconds for the SSE to connect
+      const isReady = await redis.get(`chat_ready:${sessionId}:${input.jobId}`);
+      if (!isReady) {
+        console.log(`Waiting for SSE to connect for session ${sessionId}...`);
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            workerCancelEmitter.off(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
+            resolve();
+          }, 5000);
+          
+          const onReady = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          workerCancelEmitter.once(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
+        });
+      }
+
+      const channel = `chat_stream:${sessionId}:${input.jobId}`;
+      const cancelChannel = `chat_cancel:${sessionId}:${input.jobId}`;
       const ac = new AbortController();
 
       // Subscribe to cancellation events using the global emitter
@@ -42,19 +66,25 @@ export function startWorker() {
       try {
         const stream = streamAgent(input, ac.signal);
         let wasInterrupted = false;
+        let hasEmittedTerminal = false;
         for await (const event of stream) {
           if (ac.signal.aborted) break;
           if ((event as any).type === "interrupt") {
             wasInterrupted = true;
           }
+          if ((event as any).type === "done" || (event as any).type === "error") {
+            hasEmittedTerminal = true;
+          }
           // Publish the event to Pub/Sub using the global redis cache connection
           await redis.publish(channel, JSON.stringify({ ...event, jobId: input.jobId }));
         }
         
-        if (ac.signal.aborted) {
-           await redis.publish(channel, JSON.stringify({ type: "error", message: "ABORTED", jobId: input.jobId }));
-        } else if (!wasInterrupted) {
-           await redis.publish(channel, JSON.stringify({ type: "done", jobId: input.jobId }));
+        if (!hasEmittedTerminal) {
+          if (ac.signal.aborted) {
+             await redis.publish(channel, JSON.stringify({ type: "error", message: "ABORTED", jobId: input.jobId }));
+          } else if (!wasInterrupted) {
+             await redis.publish(channel, JSON.stringify({ type: "done", jobId: input.jobId }));
+          }
         }
 
       } catch (err: any) {

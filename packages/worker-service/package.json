@@ -11,7 +11,7 @@
     "@wright/database": "workspace:*",
     "@wright/redis": "workspace:*",
     "@wright/shared": "workspace:*",
-    "bullmq": "^3.0.0"
+    "bullmq": "^6.0.8"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

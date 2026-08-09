@@ -146,9 +146,16 @@ export const sessionRouter = router({
     .mutation(async ({ input }) => {
       const { sessionId, enabledSkills, enabledMcps } = input;
       // console.log(enabledMcps);
+      const sortedSkills = Object.fromEntries(
+        Object.entries(enabledSkills).sort((a, b) => a[0].localeCompare(b[0]))
+      );
+      const sortedMcps = Object.fromEntries(
+        Object.entries(enabledMcps).sort((a, b) => a[0].localeCompare(b[0]))
+      );
+      
       const payloadString = JSON.stringify({
-        skills: enabledSkills,
-        mcps: enabledMcps,
+        skills: sortedSkills,
+        mcps: sortedMcps,
       });
       const hash = crypto
         .createHash("sha256")

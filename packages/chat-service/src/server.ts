@@ -49,8 +49,19 @@ app.get("/", (_req, res) => {
 });
 
 // Easily toggle this on/off when you want to monitor jobs!
-const ENABLE_DASHBOARD = true; 
+const ENABLE_DASHBOARD = process.env.ENABLE_BULL_DASHBOARD === "true"; 
 if (ENABLE_DASHBOARD) {
+  app.use("/admin/queues", (req, res, next) => {
+    const b64auth = (req.headers.authorization || "").split(" ")[1] || "";
+    const [login, password] = Buffer.from(b64auth, "base64").toString().split(":");
+    const expectedPassword = process.env.BULL_BOARD_PASSWORD;
+    
+    if (!expectedPassword || login !== "admin" || password !== expectedPassword) {
+      res.set("WWW-Authenticate", 'Basic realm="Bull Board"');
+      return res.status(401).send("Authentication required.");
+    }
+    next();
+  });
   setupBullBoard(app);
 }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as fs from "fs";
 
 const logDebug = (msg: string) => {
+  if (process.env.WRIGHT_DEBUG !== "true") return;
   try {
     fs.appendFileSync(
       "use-chat-debug.log",
@@ -101,11 +102,12 @@ export function useChat({
   const activeRequest = activeRequestState;
 
   const hasAutoResumedRef = useRef(false);
+  const retryCountsRef = useRef<Record<string, number>>({});
 
   const cancelChatMutation = useMutation(
     trpc.chat.cancelChat.mutationOptions(),
   );
-  
+
   const submitChatJobMutation = useMutation({
     ...trpc.chat.submitChatJob.mutationOptions(),
     onError: (err, variables) => {
@@ -114,6 +116,19 @@ export function useChat({
           err.message === "SESSION_CONFIG_NOT_SYNCED") &&
         forceSync
       ) {
+        const jId = variables.jobId || "unknown";
+        const retries = retryCountsRef.current[jId] || 0;
+        if (retries >= 1) {
+          console.error("Max retries reached for job", jId);
+          toast.show({
+            variant: ToastVariant.ERROR,
+            message: "Backend synchronization failed. Please restart the CLI.",
+          });
+          setStatus("error");
+          return;
+        }
+        retryCountsRef.current[jId] = retries + 1;
+
         console.log("[useChat] Cache miss in backend, forcing tools resync...");
         forceSync()
           .then(() => {
@@ -128,7 +143,7 @@ export function useChat({
           });
         return;
       }
-      
+
       console.error("Mutation Error:", err);
       toast.show({
         variant: ToastVariant.ERROR,
@@ -152,6 +167,7 @@ export function useChat({
   }, [activeToolCalls]);
 
   useEffect(() => {
+    if (process.env.WRIGHT_DEBUG !== "true") return;
     try {
       fs.writeFileSync("use-chat-debug.log", "");
       logDebug(`--- Session Started / Switched: ${sessionId} ---`);
@@ -227,22 +243,27 @@ export function useChat({
     trpc.chat.streamChat.subscriptionOptions(
       {
         sessionId,
+        jobId: activeRequest?.jobId || "",
       },
       // eslint-disable-next-line react-hooks/refs
       {
         enabled: !!activeRequest && !!sessionId,
         onData(event) {
-          logDebug(`[onData] Event: ${event.type} | JobId: ${event.jobId} | activeReq: ${activeRequestRef.current?.jobId}`);
+          logDebug(
+            `[onData] Event: ${event.type} | JobId: ${event.jobId} | activeReq: ${activeRequestRef.current?.jobId}`,
+          );
           console.log(
             `[use-chat] Received event: ${event.type} (jobId: ${event.jobId}, activeRequest: ${activeRequestRef.current?.jobId})`,
           );
-          
+
           if (
             activeRequestRef.current?.jobId &&
             event.jobId &&
             activeRequestRef.current.jobId !== event.jobId
           ) {
-            logDebug(`[onData] Ignoring event ${event.type} because jobId ${event.jobId} !== ${activeRequestRef.current.jobId}`);
+            logDebug(
+              `[onData] Ignoring event ${event.type} because jobId ${event.jobId} !== ${activeRequestRef.current.jobId}`,
+            );
             return;
           }
 
@@ -322,10 +343,14 @@ export function useChat({
                   event.jobId &&
                   activeRequestRef.current.jobId !== event.jobId
                 ) {
-                  logDebug(`[done.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`);
+                  logDebug(
+                    `[done.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`,
+                  );
                   return;
                 }
-                logDebug(`[done.finally] Setting status to idle and activeRequest to null`);
+                logDebug(
+                  `[done.finally] Setting status to idle and activeRequest to null`,
+                );
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -351,10 +376,14 @@ export function useChat({
                   event.jobId &&
                   activeRequestRef.current.jobId !== event.jobId
                 ) {
-                  logDebug(`[error.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`);
+                  logDebug(
+                    `[error.finally] Bailing out because activeReq ${activeRequestRef.current.jobId} !== event ${event.jobId}`,
+                  );
                   return;
                 }
-                logDebug(`[error.finally] Setting status to error and activeRequest to null`);
+                logDebug(
+                  `[error.finally] Setting status to error and activeRequest to null`,
+                );
                 setActiveRequest(null);
                 setStreamedContent("");
                 setStreamedReasoning("");
@@ -504,7 +533,11 @@ export function useChat({
       setStatus("streaming");
       const newJobId = globalThis.crypto.randomUUID();
       logDebug(`[submitInterrupt] Starting new job: ${newJobId}`);
-      const newReq = { resume: resumePayload, timestamp: Date.now(), jobId: newJobId };
+      const newReq = {
+        resume: resumePayload,
+        timestamp: Date.now(),
+        jobId: newJobId,
+      };
       setActiveRequest(newReq);
       activeRequestRef.current = newReq;
 
@@ -523,7 +556,7 @@ export function useChat({
 
   const stop = useCallback(() => {
     // 1. Explicitly notify the backend to abort the LangGraph run
-    cancelChatMutation.mutate({ sessionId });
+    cancelChatMutation.mutate({ sessionId, jobId: activeRequestRef.current?.jobId || "" });
 
     // 2. Setting activeRequest to null immediately unsubscribes tRPC
     setActiveRequest(null);

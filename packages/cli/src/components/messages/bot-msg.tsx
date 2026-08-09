@@ -168,7 +168,8 @@ export const BotMsg = ({
               }
 
               // Hide options for completed ask_question to keep history clean
-              if (parsedArgsObj && tc.name === "ask_question" && tc.result) {
+              if (parsedArgsObj && typeof parsedArgsObj === "object" && tc.name === "ask_question" && tc.result) {
+                parsedArgsObj = { ...parsedArgsObj };
                 delete parsedArgsObj.options;
                 delete parsedArgsObj.isMultiSelect;
               }

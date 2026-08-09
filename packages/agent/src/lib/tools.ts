@@ -1,6 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { interrupt } from "@langchain/langgraph";
+import { ToolMessage } from "@langchain/core/messages";
 
 // -----------------------------------------
 // CORE EXECUTION TOOLS (Client-Side)
@@ -195,6 +196,14 @@ export async function createMcpProxyTools(serverName: string, mcpToolsPayload: a
         });
         if (res === "__CANCELLED__" || res === "Cancel") {
           throw new Error(`User denied permission for ${t.name}`);
+        }
+
+        if (input && typeof input === "object" && input.id) {
+          return new ToolMessage({
+            content: typeof res === "string" ? res : JSON.stringify(res),
+            name: t.name,
+            tool_call_id: input.id,
+          });
         }
         return res;
       };

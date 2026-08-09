@@ -5,7 +5,7 @@ import * as path from "path";
 import * as os from "os";
 
 export class PermissionManager {
-  private static sessionRules: PermissionRule[] = [];
+  private static sessionRules: Record<string, PermissionRule[]> = {};
   
   private static get systemConfigPath(): string {
     return path.join(os.homedir(), ".wright", "permissions.json");
@@ -34,7 +34,7 @@ export class PermissionManager {
     }
   }
 
-  public static async grant(toolName: string, targetPattern: string, scope: PermissionScope) {
+  public static async grant(toolName: string, targetPattern: string, scope: PermissionScope, sessionId?: string) {
     const rule: PermissionRule = {
       toolName,
       targetPattern,
@@ -43,7 +43,10 @@ export class PermissionManager {
     };
 
     if (scope === "session") {
-      this.sessionRules.push(rule);
+      if (sessionId) {
+        if (!this.sessionRules[sessionId]) this.sessionRules[sessionId] = [];
+        this.sessionRules[sessionId].push(rule);
+      }
     } else if (scope === "system") {
       const sysRules = await this.loadSystemRules();
       sysRules.push(rule);
@@ -54,21 +57,34 @@ export class PermissionManager {
   /**
    * Checks if a specific tool and target are allowed.
    */
-  public static async check(toolName: string, target: string, activeCwd: string): Promise<PermissionCheckResult> {
+  public static async check(toolName: string, target: string, activeCwd: string, sessionId?: string): Promise<PermissionCheckResult> {
     // 1. Safe auto-grant for read operations inside the workspace
     if ((toolName === "read_file" || toolName === "list_directory") && target) {
-      // Very basic sanity check: if the path resolves inside activeCwd
-      // This allows the agent to read freely without annoying the user
       const resolvedTarget = path.resolve(activeCwd, target);
-      const resolvedActive = path.resolve(activeCwd);
-      if (resolvedTarget.startsWith(resolvedActive + path.sep) || resolvedTarget === resolvedActive) {
-        return { allowed: true }; // Auto-granted
+      
+      // Explicitly block high-risk files even inside the workspace
+      const filename = path.basename(resolvedTarget).toLowerCase();
+      const isHighRisk = filename === ".env" || filename.endsWith(".pem") || filename.includes("id_rsa");
+      
+      if (!isHighRisk) {
+        try {
+          // Resolve actual physical paths to prevent symlink traversal
+          const realTarget = await fs.realpath(resolvedTarget);
+          const realActive = await fs.realpath(activeCwd);
+          
+          if (realTarget.startsWith(realActive + path.sep) || realTarget === realActive) {
+            return { allowed: true }; // Auto-granted
+          }
+        } catch (e) {
+          // If realpath fails (e.g. file doesn't exist), fall through to standard rules
+        }
       }
     }
 
     // 2. Check Session Rules (Project-level)
-    for (const rule of this.sessionRules) {
-      if (rule.toolName === toolName && matchRule(rule.targetPattern, target)) {
+    const activeSessionRules = sessionId ? (this.sessionRules[sessionId] || []) : [];
+    for (const rule of activeSessionRules) {
+      if (rule.toolName === toolName && matchRule(rule.targetPattern, target, toolName === "run_command")) {
         return { allowed: true, rule };
       }
     }
@@ -76,7 +92,7 @@ export class PermissionManager {
     // 3. Check System Rules
     const sysRules = await this.loadSystemRules();
     for (const rule of sysRules) {
-      if (rule.toolName === toolName && matchRule(rule.targetPattern, target)) {
+      if (rule.toolName === toolName && matchRule(rule.targetPattern, target, toolName === "run_command")) {
         return { allowed: true, rule };
       }
     }

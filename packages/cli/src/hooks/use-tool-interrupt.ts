@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import * as path from "node:path";
 import { PermissionManager } from "../lib/permissions";
 import type { PermissionScope } from "../lib/permissions";
 import { executeClientTool } from "../lib/engine";
@@ -19,6 +20,7 @@ export function useToolInterrupt(
   submitInterrupt: (result: any) => void,
   activeCwd: string,
   skills?: Map<string, DiscoveredSkill>,
+  sessionId: string = "default-session",
 ) {
   const skillsRef = useRef(skills);
   useEffect(() => {
@@ -38,6 +40,101 @@ export function useToolInterrupt(
   } | null>(null);
 
   const lastProcessedPayloadRef = useRef<any>(null);
+  const isResolvingRef = useRef(false);
+
+  const processChain = async (
+    payloads: any[],
+    initialResolvedMap: Record<string, any>
+  ) => {
+    const currentResolvedMap = { ...initialResolvedMap };
+
+    for (let i = 0; i < payloads.length; i++) {
+      const p = payloads[i];
+      const payload = p.value || p;
+      const id = p.id;
+
+      if (payload.type === "ask_permission") {
+        const { target } = payload;
+        const checkResult = await PermissionManager.check("ask_permission", target, activeCwd, sessionId);
+        if (checkResult.allowed) {
+          currentResolvedMap[id] = "Yes, approve";
+        } else {
+          return {
+            blocked: {
+              toolName: "ask_permission",
+              target,
+              args: payload,
+              isBackendPermissionPrompt: true,
+              interruptId: id,
+              resolvedMap: currentResolvedMap,
+              remainingPayloads: payloads.slice(i + 1),
+            },
+          };
+        }
+      } else if (payload.type === "client_tool") {
+        const { name, args } = payload;
+        
+        // Resolve path to prevent relative path permission bypasses
+        const resolvedArgs = { ...args };
+        if (resolvedArgs.path) {
+          resolvedArgs.path = path.resolve(activeCwd, resolvedArgs.path);
+        }
+
+        const target = resolvedArgs.path || resolvedArgs.command || "";
+        const checkResult = await PermissionManager.check(name, target, activeCwd, sessionId);
+
+        if (checkResult.allowed) {
+          currentResolvedMap[id] = await executeClientTool(name, resolvedArgs, activeCwd);
+        } else {
+          return {
+            blocked: {
+              toolName: name,
+              target,
+              args: resolvedArgs,
+              isBackendPermissionPrompt: false,
+              interruptId: id,
+              resolvedMap: currentResolvedMap,
+              remainingPayloads: payloads.slice(i + 1),
+            },
+          };
+        }
+      } else if (payload.type === "invoke_skill") {
+        const { name, args } = payload;
+        currentResolvedMap[id] = await executeSkill(
+          name,
+          args,
+          activeCwd,
+          skillsRef.current,
+          "default-session",
+          disableSkillShellExecution,
+        );
+      } else if (payload.type === "invoke_mcp") {
+        const { serverName, toolName, args } = payload;
+        const target = `${serverName}.${toolName}`;
+        const checkResult = await PermissionManager.check("invoke_mcp", target, activeCwd, sessionId);
+
+        if (checkResult.allowed) {
+          currentResolvedMap[id] = await executeMcpTool(serverName, toolName, args);
+        } else {
+          return {
+            blocked: {
+              toolName: "invoke_mcp",
+              target,
+              args: payload,
+              isBackendPermissionPrompt: false,
+              interruptId: id,
+              resolvedMap: currentResolvedMap,
+              remainingPayloads: payloads.slice(i + 1),
+            },
+          };
+        }
+      } else {
+        currentResolvedMap[id] = `Error: Unsupported tool or interrupt payload type '${payload.type}'`;
+      }
+    }
+
+    return { resolvedMap: currentResolvedMap };
+  };
 
   useEffect(() => {
     if (!interruptPayload) {
@@ -71,116 +168,12 @@ export function useToolInterrupt(
       });
       if (hasGeneric) return;
 
-      const resolvedMap: Record<string, any> = {};
-
-      let blockedIndex = -1;
-
-      for (let i = 0; i < payloads.length; i++) {
-        const p = payloads[i];
-        const payload = p.value || p;
-        const id = p.id;
-
-        // 1. Is it a backend generic ask_permission?
-        if (payload.type === "ask_permission") {
-          const { target } = payload;
-          const checkResult = await PermissionManager.check(
-            "ask_permission",
-            target,
-            activeCwd,
-          );
-          if (checkResult.allowed) {
-            resolvedMap[id] = "Yes, approve";
-            continue;
-          }
-
-          setPendingApproval({
-            toolName: "ask_permission",
-            target,
-            args: payload,
-            isBackendPermissionPrompt: true,
-            interruptId: id,
-            resolvedMap,
-            remainingPayloads: payloads.slice(i + 1),
-          });
-          blockedIndex = i;
-          break;
-        }
-
-        // 2. Is it a client_tool execution?
-        if (payload.type === "client_tool") {
-          const { name, args } = payload;
-          const target = args?.path || args?.command || "";
-
-          const checkResult = await PermissionManager.check(
-            name,
-            target,
-            activeCwd,
-          );
-
-          if (checkResult.allowed) {
-            const output = await executeClientTool(name, args, activeCwd);
-            resolvedMap[id] = output;
-          } else {
-            setPendingApproval({
-              toolName: name,
-              target,
-              args,
-              isBackendPermissionPrompt: false,
-              interruptId: id,
-              resolvedMap,
-              remainingPayloads: payloads.slice(i + 1),
-            });
-            blockedIndex = i;
-            break;
-          }
-        }
-
-        // 3. Is it an invoke_skill?
-        if (payload.type === "invoke_skill") {
-          const { name, args } = payload;
-          const output = await executeSkill(
-            name,
-            args,
-            activeCwd,
-            skillsRef.current,
-          );
-          resolvedMap[id] = output;
-          continue;
-        }
-
-        // 4. Is it an invoke_mcp?
-        if (payload.type === "invoke_mcp") {
-          const { serverName, toolName, args } = payload;
-          const target = `${serverName}.${toolName}`;
-
-          const checkResult = await PermissionManager.check(
-            "invoke_mcp",
-            target,
-            activeCwd,
-          );
-
-          if (checkResult.allowed) {
-            const output = await executeMcpTool(serverName, toolName, args);
-            resolvedMap[id] = output;
-          } else {
-            setPendingApproval({
-              toolName: "invoke_mcp",
-              target,
-              args: payload,
-              isBackendPermissionPrompt: false,
-              interruptId: id,
-              resolvedMap,
-              remainingPayloads: payloads.slice(i + 1),
-            });
-            blockedIndex = i;
-            break;
-          }
-        }
-      }
-
-      if (blockedIndex === -1 && isMounted) {
-        // All auto-approved!
-        submitInterrupt(resolvedMap);
+      const result = await processChain(payloads, {});
+      
+      if (result.blocked && isMounted) {
+        setPendingApproval(result.blocked);
+      } else if (result.resolvedMap && isMounted) {
+        submitInterrupt(result.resolvedMap);
       }
     };
 
@@ -213,20 +206,21 @@ export function useToolInterrupt(
     decision: "allow_once" | "allow_session" | "allow_system" | "deny",
     wildcardTarget?: string,
   ) => {
-    if (!pendingApproval) return;
-
-    const {
-      toolName,
-      target,
-      args,
-      isBackendPermissionPrompt,
-      interruptId,
-      resolvedMap,
-      remainingPayloads,
-    } = pendingApproval;
-    const finalTarget = wildcardTarget || target;
+    if (!pendingApproval || isResolvingRef.current) return;
+    isResolvingRef.current = true;
 
     try {
+      const {
+        toolName,
+        target,
+        args,
+        isBackendPermissionPrompt,
+        interruptId,
+        resolvedMap,
+        remainingPayloads,
+      } = pendingApproval;
+      const finalTarget = wildcardTarget || target;
+
       // Handle Deny
       if (decision === "deny") {
         setPendingApproval(null);
@@ -248,9 +242,9 @@ export function useToolInterrupt(
 
       // Handle Grant
       if (decision === "allow_session") {
-        await PermissionManager.grant(toolName, finalTarget, "session");
+        await PermissionManager.grant(toolName, finalTarget, "session", sessionId);
       } else if (decision === "allow_system") {
-        await PermissionManager.grant(toolName, finalTarget, "system");
+        await PermissionManager.grant(toolName, finalTarget, "system", sessionId);
       }
 
       setPendingApproval(null);
@@ -271,125 +265,17 @@ export function useToolInterrupt(
         newResolvedMap[interruptId] = output;
       }
 
-      // Now execute the rest (we auto-grant them if they are covered, else wait... wait!
-      // To keep it simple, we just pass the rest back to the loop by updating interruptPayload.
-      // BUT we don't have access to setInterruptPayload here!
-      // It's fine, we can just execute them here in a loop.)
-
-      let nextBlocked: any = null;
-      for (let i = 0; i < remainingPayloads.length; i++) {
-        const p = remainingPayloads[i];
-        const payload = p.value || p;
-        const id = p.id;
-
-        if (payload.type === "ask_permission") {
-          const checkResult = await PermissionManager.check(
-            "ask_permission",
-            payload.target,
-            activeCwd,
-          );
-          if (checkResult.allowed) {
-            newResolvedMap[id] = "Yes, approve";
-          } else {
-            setPendingApproval({
-              toolName: "ask_permission",
-              target: payload.target,
-              args: payload,
-              isBackendPermissionPrompt: true,
-              interruptId: id,
-              resolvedMap: newResolvedMap,
-              remainingPayloads: remainingPayloads.slice(i + 1),
-            });
-            nextBlocked = true;
-            break;
-          }
-        } else if (payload.type === "client_tool") {
-          const target = payload.args?.path || payload.args?.command || "";
-          const checkResult = await PermissionManager.check(
-            payload.name,
-            target,
-            activeCwd,
-          );
-          if (checkResult.allowed) {
-            const output = await executeClientTool(
-              payload.name,
-              payload.args,
-              activeCwd,
-            );
-            newResolvedMap[id] = output;
-          } else {
-            setPendingApproval({
-              toolName: payload.name,
-              target,
-              args: payload.args,
-              isBackendPermissionPrompt: false,
-              interruptId: id,
-              resolvedMap: newResolvedMap,
-              remainingPayloads: remainingPayloads.slice(i + 1),
-            });
-            nextBlocked = true;
-            break;
-          }
-        } else if (payload.type === "invoke_skill") {
-          const output = await executeSkill(
-            payload.name,
-            payload.args,
-            activeCwd,
-            skillsRef.current,
-            "default-session",
-            disableSkillShellExecution,
-          );
-          newResolvedMap[id] = output;
-        } else if (payload.type === "invoke_mcp") {
-          const target = `${payload.serverName}.${payload.toolName}`;
-          const checkResult = await PermissionManager.check(
-            "invoke_mcp",
-            target,
-            activeCwd,
-          );
-          if (checkResult.allowed) {
-            const output = await executeMcpTool(
-              payload.serverName,
-              payload.toolName,
-              payload.args,
-            );
-            newResolvedMap[id] = output;
-          } else {
-            setPendingApproval({
-              toolName: "invoke_mcp",
-              target,
-              args: payload,
-              isBackendPermissionPrompt: false,
-              interruptId: id,
-              resolvedMap: newResolvedMap,
-              remainingPayloads: remainingPayloads.slice(i + 1),
-            });
-            nextBlocked = true;
-            break;
-          }
-        } else {
-          // Fallback for unhandled types like ask_question in the remaining chain
-          setPendingApproval({
-            toolName: payload.type,
-            target: payload.type,
-            args: payload,
-            isBackendPermissionPrompt: false,
-            interruptId: id,
-            resolvedMap: newResolvedMap,
-            remainingPayloads: remainingPayloads.slice(i + 1),
-          });
-          nextBlocked = true;
-          break;
-        }
-      }
-
-      if (!nextBlocked) {
-        submitInterrupt(newResolvedMap);
+      const result = await processChain(remainingPayloads, newResolvedMap);
+      if (result.blocked) {
+        setPendingApproval(result.blocked);
+      } else if (result.resolvedMap) {
+        submitInterrupt(result.resolvedMap);
       }
     } catch (err: any) {
       console.error("Tool interrupt execution error:", err);
       const errorMsg = `Error: ${err instanceof Error ? err.message : String(err)}`;
 
+      const { resolvedMap, interruptId, remainingPayloads } = pendingApproval!;
       const errorMap: Record<string, any> = {
         ...resolvedMap,
         [interruptId]: errorMsg,
@@ -399,6 +285,8 @@ export function useToolInterrupt(
       }
       setPendingApproval(null);
       submitInterrupt(errorMap);
+    } finally {
+      isResolvingRef.current = false;
     }
   };
 

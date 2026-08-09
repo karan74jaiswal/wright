@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
+import * as crypto from "node:crypto";
 import type { DiscoveredServer } from "./discovery";
 
 interface McpSecurityState {
@@ -35,7 +36,26 @@ export class McpSecurityManager {
   }
 
   private static getSignature(server: DiscoveredServer): string {
-    return `${server.scope}:${server.source}:${server.name}`;
+    const stringifySorted = (obj: any): any => {
+      if (Array.isArray(obj)) return obj.map(stringifySorted);
+      if (obj !== null && typeof obj === "object") {
+        return Object.keys(obj)
+          .sort()
+          .reduce((acc: any, key) => {
+            acc[key] = stringifySorted(obj[key]);
+            return acc;
+          }, {});
+      }
+      return obj;
+    };
+
+    const sortedConfig = stringifySorted(server.config || {});
+    const configHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(sortedConfig))
+      .digest("hex");
+
+    return `${server.scope}:${server.source}:${server.name}:${configHash}`;
   }
 
   /**

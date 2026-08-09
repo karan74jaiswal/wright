@@ -21,7 +21,12 @@ export function InterruptPrompt({ payload, onSubmit }: InterruptPromptProps) {
     let activeId = "unknown";
 
     if (Array.isArray(payload)) {
-      const target = payload.find(p => p.value?.type !== "client_tool" && p.value?.type !== "ask_permission") || payload[0];
+      const target = payload.find(p => 
+        p.value?.type !== "client_tool" && 
+        p.value?.type !== "ask_permission" &&
+        p.value?.type !== "invoke_skill" &&
+        p.value?.type !== "invoke_mcp"
+      ) || payload[0];
       rawPayload = target?.value || target;
       activeId = target?.id || "unknown";
     }

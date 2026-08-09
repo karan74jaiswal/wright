@@ -79,28 +79,32 @@ function getInitialConfig(): PromptPreferences {
   }
 }
 
-async function persistConfig(config: PromptPreferences) {
-  try {
-    await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
-    
-    // Read existing to merge, just in case
-    let existing = {};
-    try {
-      const data = await readFile(PREFERENCES_PATH, { encoding: "utf-8" });
-      existing = JSON.parse(data);
-    } catch (e) {}
+let writeChain: Promise<void> = Promise.resolve();
 
-    await writeFile(
-      PREFERENCES_PATH,
-      JSON.stringify({ ...existing, ...config }, null, 2),
-      {
-        encoding: "utf8",
-        mode: 0o600,
-      },
-    );
-  } catch (err) {
-    console.error("Failed to persist prompt configuration:", err);
-  }
+function persistConfig(config: PromptPreferences) {
+  writeChain = writeChain.then(async () => {
+    try {
+      await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+      
+      // Read existing to merge, just in case
+      let existing = {};
+      try {
+        const data = await readFile(PREFERENCES_PATH, { encoding: "utf-8" });
+        existing = JSON.parse(data);
+      } catch (e) {}
+
+      await writeFile(
+        PREFERENCES_PATH,
+        JSON.stringify({ ...existing, ...config }, null, 2),
+        {
+          encoding: "utf8",
+          mode: 0o600,
+        },
+      );
+    } catch (err) {
+      console.error("Failed to persist prompt configuration:", err);
+    }
+  });
 }
 
 export default function PromptConfigProvider({

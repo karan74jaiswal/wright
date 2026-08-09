@@ -210,26 +210,30 @@ const SessionInner = ({ id }: { id: string }) => {
     if (!id || isSkillsLoading || isMcpLoading || !session) return;
 
     const optimizedSkills = Object.fromEntries(
-      Array.from(discoveredSkills.entries()).map(([key, skill]) => [
-        key,
-        {
-          name: skill.name,
-          path: skill.skillFilePath,
-          description:
-            skill.frontmatter.description || "No description provided.",
-        },
-      ]),
+      Array.from(discoveredSkills.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, skill]) => [
+          key,
+          {
+            name: skill.name,
+            path: skill.skillFilePath,
+            description:
+              skill.frontmatter.description || "No description provided.",
+          },
+        ]),
     );
     const optimizedMcps = Object.fromEntries(
-      Array.from(servers.entries()).map(([key, server]) => [
-        key,
-        {
-          name: server.name,
-          config: server.config,
-          source: server.source,
-          tools: server.tools || [],
-        },
-      ]),
+      Array.from(servers.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, server]) => [
+          key,
+          {
+            name: server.name,
+            config: server.config,
+            source: server.source,
+            tools: server.tools || [],
+          },
+        ]),
     );
 
     let isMounted = true;
@@ -292,26 +296,30 @@ const SessionInner = ({ id }: { id: string }) => {
   const forceSync = useCallback(async () => {
     // Only send the minimal metadata needed by the backend agent for skills
     const optimizedSkills = Object.fromEntries(
-      Array.from(discoveredSkills.entries()).map(([key, skill]) => [
-        key,
-        {
-          name: skill.name,
-          path: skill.skillFilePath,
-          description:
-            skill.frontmatter.description || "No description provided.",
-        },
-      ]),
+      Array.from(discoveredSkills.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, skill]) => [
+          key,
+          {
+            name: skill.name,
+            path: skill.skillFilePath,
+            description:
+              skill.frontmatter.description || "No description provided.",
+          },
+        ]),
     );
     const optimizedMcps = Object.fromEntries(
-      Array.from(servers.entries()).map(([key, server]) => [
-        key,
-        {
-          name: server.name,
-          config: server.config,
-          source: server.source,
-          tools: server.tools || [],
-        },
-      ]),
+      Array.from(servers.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, server]) => [
+          key,
+          {
+            name: server.name,
+            config: server.config,
+            source: server.source,
+            tools: server.tools || [],
+          },
+        ]),
     );
 
     await syncConfigMutation.mutateAsync({
@@ -353,6 +361,7 @@ const SessionInner = ({ id }: { id: string }) => {
     submitInterrupt,
     session?.cwd || process.cwd(),
     discoveredSkills,
+    id!
   );
 
   const lastVisibleMsg = useMemo(() => {
