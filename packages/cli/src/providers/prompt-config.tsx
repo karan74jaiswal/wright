@@ -1,4 +1,5 @@
-import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -32,6 +33,8 @@ interface PromptConfigContextValue {
   setApiKeys(keys: Partial<ProviderApiKeys>): void;
   trustedWorkspaces: Record<string, boolean>;
   setTrustedWorkspace(path: string, trusted: boolean): void;
+  disableSkillShellExecution: boolean;
+  setDisableSkillShellExecution(disabled: boolean): void;
 }
 
 interface PromptPreferences {
@@ -40,6 +43,7 @@ interface PromptPreferences {
   reasoningEffort?: ReasoningEffort;
   providerApiKeys?: ProviderApiKeys;
   trustedWorkspaces?: Record<string, boolean>;
+  disableSkillShellExecution?: boolean;
 }
 
 const PromptConfigContext = createContext<PromptConfigContextValue | null>(null);
@@ -61,6 +65,7 @@ function getInitialConfig(): PromptPreferences {
       reasoningEffort: (preferences.reasoningEffort as ReasoningEffort) || "high",
       providerApiKeys: preferences.providerApiKeys || {},
       trustedWorkspaces: preferences.trustedWorkspaces || {},
+      disableSkillShellExecution: preferences.disableSkillShellExecution || false,
     };
   } catch (err: any) {
     return {
@@ -69,31 +74,37 @@ function getInitialConfig(): PromptPreferences {
       reasoningEffort: "high",
       providerApiKeys: {},
       trustedWorkspaces: {},
+      disableSkillShellExecution: false,
     };
   }
 }
 
-function persistConfig(config: PromptPreferences) {
-  try {
-    mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-    
-    // Read existing to merge, just in case
-    let existing = {};
-    try {
-      existing = JSON.parse(readFileSync(PREFERENCES_PATH, { encoding: "utf-8" }));
-    } catch (e) {}
+let writeChain: Promise<void> = Promise.resolve();
 
-    writeFileSync(
-      PREFERENCES_PATH,
-      JSON.stringify({ ...existing, ...config }, null, 2),
-      {
-        encoding: "utf8",
-        mode: 0o600,
-      },
-    );
-  } catch (err) {
-    console.error("Failed to persist prompt configuration:", err);
-  }
+function persistConfig(config: PromptPreferences) {
+  writeChain = writeChain.then(async () => {
+    try {
+      await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+      
+      // Read existing to merge, just in case
+      let existing = {};
+      try {
+        const data = await readFile(PREFERENCES_PATH, { encoding: "utf-8" });
+        existing = JSON.parse(data);
+      } catch (e) {}
+
+      await writeFile(
+        PREFERENCES_PATH,
+        JSON.stringify({ ...existing, ...config }, null, 2),
+        {
+          encoding: "utf8",
+          mode: 0o600,
+        },
+      );
+    } catch (err) {
+      console.error("Failed to persist prompt configuration:", err);
+    }
+  });
 }
 
 export default function PromptConfigProvider({
@@ -105,6 +116,7 @@ export default function PromptConfigProvider({
   const [reasoningEffort, setCurrentReasoningEffort] = useState<ReasoningEffort>((initialConfig.reasoningEffort as ReasoningEffort) || "high");
   const [providerApiKeys, setCurrentApiKeys] = useState<ProviderApiKeys>(initialConfig.providerApiKeys || {});
   const [trustedWorkspaces, setTrustedWorkspaces] = useState<Record<string, boolean>>(initialConfig.trustedWorkspaces || {});
+  const [disableSkillShellExecution, setCurrentDisableSkillShellExecution] = useState<boolean>(initialConfig.disableSkillShellExecution || false);
 
   const setMode = useCallback((mode: Mode) => {
     setCurrentMode(mode);
@@ -137,9 +149,14 @@ export default function PromptConfigProvider({
     });
   }, []);
 
+  const setDisableSkillShellExecution = useCallback((disabled: boolean) => {
+    setCurrentDisableSkillShellExecution(disabled);
+    persistConfig({ disableSkillShellExecution: disabled });
+  }, []);
+
   const values = useMemo(
-    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace }),
-    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace],
+    () => ({ currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace, disableSkillShellExecution, setDisableSkillShellExecution }),
+    [currentMode, setMode, currentModel, setModel, reasoningEffort, setReasoningEffort, providerApiKeys, setApiKeys, trustedWorkspaces, setTrustedWorkspace, disableSkillShellExecution, setDisableSkillShellExecution],
   );
   return (
     <PromptConfigContext.Provider value={values}>{children}</PromptConfigContext.Provider>

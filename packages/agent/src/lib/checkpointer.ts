@@ -22,16 +22,26 @@ export function getCheckpointer() {
 export function setupCheckpointer(): Promise<void> {
   if (!setupPromise) {
     const cp = getCheckpointer();
-    setupPromise = cp.setup();
+    setupPromise = cp.setup().catch((err) => {
+      // Reset so the next call retries instead of permanently caching a rejected promise
+      setupPromise = null;
+      throw err;
+    });
   }
   return setupPromise;
 }
 
 export async function shutdownCheckpointer(): Promise<void> {
   if (pool) {
-    await pool.end();
+    const p = pool;
     pool = null;
     checkpointer = null;
     setupPromise = null;
+    
+    try {
+      await p.end();
+    } catch (e) {
+      console.error("Error during checkpointer shutdown:", e);
+    }
   }
 }

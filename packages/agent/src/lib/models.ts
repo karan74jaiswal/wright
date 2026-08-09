@@ -53,8 +53,10 @@ export function resolveOpenAIModel(
 
   return new ChatOpenAI({
     model: modelId,
+
     temperature: isReasoningModel ? undefined : 1,
     apiKey: config?.apiKey || process.env.OPENAI_API_KEY,
+
     ...(isReasoningModel && {
       reasoning_effort: config?.reasoningEffort || "medium",
     }),

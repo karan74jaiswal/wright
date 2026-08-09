@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { createCliRenderer, ConsolePosition } from "@opentui/core";
 import { installCapture } from "@anscribe/opentui";
 import "@anscribe/mcp/sink";
@@ -9,7 +10,7 @@ import NewSession from "./screens/new-session";
 import Session from "./screens/session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  httpBatchLink,
+  httpLink,
   httpSubscriptionLink,
   splitLink,
   createTRPCClient,
@@ -18,6 +19,9 @@ import { TRPCProvider } from "./lib/api-client";
 import type { AppRouter } from "@wright/api-gateway";
 import { EventSource } from "eventsource";
 import superjson from "superjson";
+
+// Set the terminal window/tab title to 'wright'
+process.stdout.write("\x1b]0;wright\x07");
 
 const url = process.env.API_URL ?? "http://localhost:3000/api";
 
@@ -52,7 +56,7 @@ const trpcClient = createTRPCClient<AppRouter>({
         EventSource: EventSource as any,
         transformer: superjson,
       }),
-      false: httpBatchLink({ url, transformer: superjson }),
+      false: httpLink({ url, transformer: superjson }),
     }),
   ],
 });

@@ -49,32 +49,43 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("done"),
     messageId: z.string().optional(),
+    jobId: z.string().optional(),
   }),
   z.object({
     type: z.literal("error"),
     message: z.string(),
+    jobId: z.string().optional(),
   }),
 ]);
 
 export type ChatStreamEvent = z.infer<typeof chatStreamEventSchema>;
 
-const supportedModelIds = SUPPORTED_CHAT_MODELS.map(m => m.id) as [string, ...string[]];
+const supportedModelIds = SUPPORTED_CHAT_MODELS.map((m) => m.id) as [
+  string,
+  ...string[],
+];
 
 export const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID is required").max(255),
   message: z.string().optional(),
+  toolsHash: z.string().optional(),
   activeCwd: z.string().optional(),
   resume: z.unknown().optional(),
+  jobId: z.string().optional(),
   model: z.string().refine((val) => supportedModelIds.includes(val), {
     message: "Invalid or unsupported Model ID",
   }),
   mode: z.enum(["BUILD", "PLAN"]).default("BUILD"),
-  reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
-  providerApiKeys: z.object({
-    openai: z.string().optional(),
-    anthropic: z.string().optional(),
-    google: z.string().optional(),
-  }).optional(),
+  reasoningEffort: z
+    .enum(["none", "minimal", "low", "medium", "high", "xhigh", "max"])
+    .optional(),
+  providerApiKeys: z
+    .object({
+      openai: z.string().optional(),
+      anthropic: z.string().optional(),
+      google: z.string().optional(),
+    })
+    .optional(),
   isAutoResume: z.boolean().optional(),
 });
 

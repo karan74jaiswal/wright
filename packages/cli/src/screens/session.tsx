@@ -1,20 +1,26 @@
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useEffect, useMemo, memo, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTheme } from "../providers/theme";
 import SessionShell from "../components/session-shell";
 import { z } from "zod";
+import { Mode } from "@wright/database/enums";
 import { UserMsg, BotMsg, ErrorMsg } from "../components/messages";
 import { useToast } from "../providers/toast";
 import { useTRPC } from "../lib/api-client";
 import { ToastVariant } from "../providers/toast/types";
 import { useChat } from "../hooks/use-chat";
+import { useToolInterrupt } from "../hooks/use-tool-interrupt";
+import { ToolApprovalPrompt } from "../components/tool-approval-prompt";
 import { InterruptPrompt } from "../components/interrupt-prompt";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@wright/api-gateway";
 import { DEFAULT_CHAT_MODEL_ID } from "@wright/shared";
 import { useKeyboardLayer } from "../providers/keyboard";
 import { useKeyboard } from "@opentui/react";
+import { useMcp } from "../providers/mcp";
+import { useSkills } from "../providers/skills";
+import crypto from "node:crypto";
 
 type SessionData = inferRouterOutputs<AppRouter>["session"]["getSession"];
 
@@ -30,6 +36,9 @@ interface ChatMessageProps {
   hideFooter?: boolean;
   hideHeader?: boolean;
   groupDuration?: number;
+  allMessages?: SessionData["messages"];
+  isPendingApproval?: boolean;
+  isLastVisible?: boolean;
 }
 
 const ChatMessage = memo(function ChatMessage({
@@ -38,18 +47,66 @@ const ChatMessage = memo(function ChatMessage({
   hideFooter,
   hideHeader,
   groupDuration,
+  allMessages,
+  isPendingApproval,
+  isLastVisible,
 }: ChatMessageProps) {
-  if (msg.role === "USER") return <UserMsg message={msg.content} />;
+  if (msg.role === "USER")
+    return <UserMsg message={msg.content} mode={msg.mode as Mode} />;
   if (msg.role === "ERROR") return <ErrorMsg message={msg.content} />;
   if (msg.role === "TOOL") return null;
   if (msg.role === "SYSTEM") return null;
 
   let parsedToolCalls: Record<string, any> | undefined = undefined;
-  if (msg.toolCalls && Array.isArray(msg.toolCalls)) {
-    parsedToolCalls = msg.toolCalls.reduce((acc: any, tc: any, i) => {
-      acc[tc.id || String(i)] = { name: tc.name, args: tc.args, result: true };
-      return acc;
-    }, {});
+  if (msg.toolCalls) {
+    let rawToolCalls = msg.toolCalls;
+    if (typeof rawToolCalls === "string") {
+      try {
+        rawToolCalls = JSON.parse(rawToolCalls);
+      } catch (e) {
+        rawToolCalls = [];
+      }
+    }
+
+    if (Array.isArray(rawToolCalls)) {
+      parsedToolCalls = rawToolCalls.reduce((acc: any, tc: any, i: number) => {
+        const tcId = tc.id || String(i);
+        let toolMsg = allMessages?.find(
+          (m) => m.role === "TOOL" && m.toolCallId === tcId,
+        );
+
+        // Fallback for old history where toolCallId was saved as "unknown"
+        if (!toolMsg) {
+          const myIdx = allMessages?.findIndex((m) => m.id === msg.id) ?? -1;
+          if (myIdx !== -1) {
+            toolMsg = allMessages
+              ?.slice(myIdx + 1)
+              .find(
+                (m) =>
+                  m.role === "TOOL" &&
+                  m.toolCallId === "unknown" &&
+                  !acc._used?.includes(m.id),
+              );
+          }
+        }
+
+        acc[tcId] = {
+          name: tc.name,
+          args: tc.args,
+          result: toolMsg ? toolMsg.content : (msg.status === "INTERRUPTED" ? undefined : true),
+        };
+        if (toolMsg) {
+          acc._used = [...(acc._used || []), toolMsg.id];
+        }
+        return acc;
+      }, {});
+      if (parsedToolCalls) {
+        delete parsedToolCalls._used;
+      }
+    } else if (typeof rawToolCalls === "object" && rawToolCalls !== null) {
+      // It might already be a Record<string, any> from optimistic updates
+      parsedToolCalls = rawToolCalls as Record<string, any>;
+    }
   }
 
   let displayContent = msg.content;
@@ -68,6 +125,8 @@ const ChatMessage = memo(function ChatMessage({
     // Ignore JSON parse error, use raw content
   }
 
+  const showInterruptedBadge = msg.status === "INTERRUPTED" && (!isLastVisible || isPendingApproval);
+
   return (
     <BotMsg
       content={displayContent}
@@ -76,7 +135,7 @@ const ChatMessage = memo(function ChatMessage({
       reasoningDuration={msg.reasoningDuration || undefined}
       toolCalls={parsedToolCalls}
       mode={msg.mode}
-      status={msg.status}
+      status={showInterruptedBadge ? "INTERRUPTED" : (msg.status === "INTERRUPTED" ? undefined : msg.status)}
       duration={groupDuration ?? msg.duration}
       showReasoning={showReasoning}
       reasoningEffort={msg.reasoningEffort}
@@ -96,12 +155,15 @@ const SessionInner = ({ id }: { id: string }) => {
   const { isTopLayer } = useKeyboardLayer();
 
   useKeyboard(
-    useCallback((key: any) => {
-      if (!isTopLayer("base")) return;
-      if (key.ctrl && key.name === "o") {
-        setShowReasoning((prev) => !prev);
-      }
-    }, [isTopLayer])
+    useCallback(
+      (key: any) => {
+        if (!isTopLayer("base")) return;
+        if (key.ctrl && key.name === "o") {
+          setShowReasoning((prev) => !prev);
+        }
+      },
+      [isTopLayer],
+    ),
   );
 
   const prefetched = useMemo(() => {
@@ -110,7 +172,23 @@ const SessionInner = ({ id }: { id: string }) => {
     return parsed.data.session;
   }, [location.state]);
 
+  const { skills: discoveredSkills, isLoading: isSkillsLoading } = useSkills();
+  const { servers, isLoading: isMcpLoading } = useMcp();
   const trpc = useTRPC();
+
+  const isPreSynced = useMemo(() => {
+    return !!(
+      location.state &&
+      typeof location.state === "object" &&
+      "session" in location.state
+    );
+  }, [location.state]);
+
+  const [synced, setSynced] = useState(isPreSynced);
+  const syncConfigMutation = useMutation(
+    trpc.session.syncSessionConfig.mutationOptions(),
+  );
+
   const {
     data: rawSession,
     isError,
@@ -123,6 +201,81 @@ const SessionInner = ({ id }: { id: string }) => {
   });
 
   const session = rawSession as SessionData | undefined;
+
+  const [currentToolsHash, setCurrentToolsHash] = useState<string | undefined>(
+    session?.toolsHash || undefined,
+  );
+
+  useEffect(() => {
+    if (!id || isSkillsLoading || isMcpLoading || !session) return;
+
+    const optimizedSkills = Object.fromEntries(
+      Array.from(discoveredSkills.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, skill]) => [
+          key,
+          {
+            name: skill.name,
+            path: skill.skillFilePath,
+            description:
+              skill.frontmatter.description || "No description provided.",
+          },
+        ]),
+    );
+    const optimizedMcps = Object.fromEntries(
+      Array.from(servers.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, server]) => [
+          key,
+          {
+            name: server.name,
+            config: server.config,
+            source: server.source,
+            tools: server.tools || [],
+          },
+        ]),
+    );
+
+    let isMounted = true;
+
+    const syncState = async () => {
+      // Compute CAS Hash identical to backend
+      const payloadString = JSON.stringify({
+        skills: optimizedSkills,
+        mcps: optimizedMcps,
+      });
+      const hashHex = crypto
+        .createHash("sha256")
+        .update(payloadString)
+        .digest("hex");
+      if (isMounted) setCurrentToolsHash(hashHex);
+
+      // If local hash matches DB hash, we are in sync!
+      if (session.toolsHash === hashHex) {
+        if (isMounted) setSynced(true);
+        return;
+      }
+
+      // Cache miss / Out of sync -> Push payload to backend
+      try {
+        await syncConfigMutation.mutateAsync({
+          sessionId: id,
+          enabledSkills: optimizedSkills,
+          enabledMcps: optimizedMcps,
+        });
+        if (isMounted) setSynced(true);
+      } catch (e) {
+        console.error("Failed to sync session config on resume:", e);
+        if (isMounted) setSynced(true);
+      }
+    };
+
+    syncState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, discoveredSkills, servers, isSkillsLoading, isMcpLoading, session]);
 
   useEffect(() => {
     if (isError) {
@@ -140,6 +293,51 @@ const SessionInner = ({ id }: { id: string }) => {
     [session?.messages],
   );
 
+  const forceSync = useCallback(async () => {
+    // Only send the minimal metadata needed by the backend agent for skills
+    const optimizedSkills = Object.fromEntries(
+      Array.from(discoveredSkills.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, skill]) => [
+          key,
+          {
+            name: skill.name,
+            path: skill.skillFilePath,
+            description:
+              skill.frontmatter.description || "No description provided.",
+          },
+        ]),
+    );
+    const optimizedMcps = Object.fromEntries(
+      Array.from(servers.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, server]) => [
+          key,
+          {
+            name: server.name,
+            config: server.config,
+            source: server.source,
+            tools: server.tools || [],
+          },
+        ]),
+    );
+
+    await syncConfigMutation.mutateAsync({
+      sessionId: id!,
+      enabledSkills: optimizedSkills,
+      enabledMcps: optimizedMcps,
+    });
+    const payloadString = JSON.stringify({
+      skills: optimizedSkills,
+      mcps: optimizedMcps,
+    });
+    const hashHex = crypto
+      .createHash("sha256")
+      .update(payloadString)
+      .digest("hex");
+    setCurrentToolsHash(hashHex);
+  }, [id, discoveredSkills, servers, syncConfigMutation]);
+
   const {
     history,
     streamedContent,
@@ -153,8 +351,18 @@ const SessionInner = ({ id }: { id: string }) => {
     stop,
   } = useChat({
     sessionId: id!,
+    toolsHash: currentToolsHash || session?.toolsHash || undefined,
     initialMessages,
+    forceSync,
   });
+
+  const { pendingApproval, resolveApproval } = useToolInterrupt(
+    interruptPayload,
+    submitInterrupt,
+    session?.cwd || process.cwd(),
+    discoveredSkills,
+    id!
+  );
 
   const lastVisibleMsg = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i--) {
@@ -166,7 +374,7 @@ const SessionInner = ({ id }: { id: string }) => {
     return null;
   }, [history]);
 
-  if (!session)
+  if (!session || !synced)
     return <SessionShell onSubmit={(_t) => {}} inputDisabled loading />;
 
   const isStreamingAiPresent = !!(
@@ -202,13 +410,23 @@ const SessionInner = ({ id }: { id: string }) => {
             }
           }
 
-          const isPrevAi = prevVisibleMsg?.role === "ASSISTANT";
+          const hasToolCalls =
+            msg.toolCalls &&
+            ((Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) ||
+              (typeof msg.toolCalls === "string" && msg.toolCalls.length > 5) ||
+              (typeof msg.toolCalls === "object" &&
+                Object.keys(msg.toolCalls).length > 0));
+
+          const hideHeader =
+            !hasToolCalls &&
+            prevVisibleMsg?.role === "ASSISTANT" &&
+            msg.role === "ASSISTANT";
+
           const isNextAi =
             nextVisibleMsg?.role === "ASSISTANT" ||
             (!nextVisibleMsg && isStreamingAiPresent);
 
           const hideFooter = isNextAi && msg.role === "ASSISTANT";
-          const hideHeader = isPrevAi && msg.role === "ASSISTANT";
 
           // Calculate total duration for the grouped block
           let groupDuration = msg.duration || 0;
@@ -239,6 +457,9 @@ const SessionInner = ({ id }: { id: string }) => {
                 hideFooter={hideFooter}
                 hideHeader={hideHeader}
                 groupDuration={groupDuration}
+                allMessages={arr}
+                isPendingApproval={!!pendingApproval}
+                isLastVisible={msg.id === lastVisibleMsg?.id}
               />
             </box>
           );
@@ -267,11 +488,34 @@ const SessionInner = ({ id }: { id: string }) => {
             />
           </box>
         ) : null,
-        status === "interrupted" && interruptPayload ? (
+        status === "interrupted" &&
+        interruptPayload &&
+        (Array.isArray(interruptPayload)
+          ? interruptPayload.some((p) => {
+              const t = p.value?.type || p.type;
+              return (
+                t !== "client_tool" &&
+                t !== "ask_permission" &&
+                t !== "invoke_skill" &&
+                t !== "invoke_mcp"
+              );
+            })
+          : interruptPayload.type !== "client_tool" &&
+            interruptPayload.type !== "ask_permission" &&
+            interruptPayload.type !== "invoke_skill" &&
+            interruptPayload.type !== "invoke_mcp") ? (
           <box key="interrupt" flexDirection="column" width="100%">
             <InterruptPrompt
               payload={interruptPayload}
               onSubmit={submitInterrupt}
+            />
+          </box>
+        ) : null,
+        pendingApproval ? (
+          <box key="tool_approval" flexDirection="column" width="100%">
+            <ToolApprovalPrompt
+              pendingApproval={pendingApproval}
+              onResolve={resolveApproval}
             />
           </box>
         ) : null,
@@ -282,7 +526,6 @@ const SessionInner = ({ id }: { id: string }) => {
 
 const Session = () => {
   const { id } = useParams();
-  // console.log(id);
   if (!id) return null;
   return <SessionInner key={id} id={id} />;
 };

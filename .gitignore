@@ -46,3 +46,7 @@ wright-requestly-api-tests
 .claude
 .codex
 .intent
+
+# Test files
+*.test.*
+test*
