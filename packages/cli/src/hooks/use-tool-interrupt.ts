@@ -84,6 +84,9 @@ export function useToolInterrupt(
         const checkResult = await PermissionManager.check(name, target, activeCwd, sessionId);
 
         if (checkResult.allowed) {
+          if (checkResult.resolvedPath && resolvedArgs.path) {
+            resolvedArgs.path = checkResult.resolvedPath;
+          }
           currentResolvedMap[id] = await executeClientTool(name, resolvedArgs, activeCwd);
         } else {
           return {

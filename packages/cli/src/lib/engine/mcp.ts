@@ -1,10 +1,11 @@
-import { globalMcpClient, incrementMcpToolCall, decrementMcpToolCall } from "../../providers/mcp";
+import { globalMcpClient, incrementMcpToolCall, decrementMcpToolCall, waitForMcpReady } from "../../providers/mcp";
 
 export async function executeMcpTool(
   serverName: string,
   toolName: string,
   args: any,
 ): Promise<any> {
+  await waitForMcpReady();
   incrementMcpToolCall();
   try {
     if (!globalMcpClient) {

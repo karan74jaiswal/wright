@@ -6,6 +6,11 @@ import { PermissionManager } from "../permissions";
 
 const execAsync = promisify(exec);
 
+const EXEC_OPTIONS = {
+  timeout: 15000, // 15 seconds max
+  maxBuffer: 1024 * 1024 * 5, // 5 MB max output
+};
+
 export async function executeSkill(
   skillName: string,
   rawArgs: Record<string, any> | string = {},
@@ -120,7 +125,7 @@ export async function executeSkill(
       continue;
     }
     try {
-      const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd });
+      const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd, ...EXEC_OPTIONS });
       const output = (stdout || stderr || "").trim();
       rendered = rendered.replace(matchStr, () => `${prefix}${output}`);
     } catch (err: any) {
@@ -160,7 +165,7 @@ export async function executeSkill(
       continue;
     }
     try {
-      const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd });
+      const { stdout, stderr } = await execAsync(cmd, { cwd: activeCwd, ...EXEC_OPTIONS });
       const output = (stdout || stderr || "").trim();
 
       rendered = rendered.replace(matchStr, () => output);

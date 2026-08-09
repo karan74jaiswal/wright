@@ -106,17 +106,18 @@ export async function* streamAgent(
     let mcpTools: any[] = [];
     if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
       logTime("streamAgent: loading mcp tools...");
-      try {
-        const { createMcpProxyTools } = await import("./lib/tools");
-        for (const [serverName, serverPayload] of Object.entries(
-          input.mcpServers as Record<string, any>,
-        )) {
-          if (!serverPayload.tools) continue;
+      const { createMcpProxyTools } = await import("./lib/tools");
+      for (const [serverName, serverPayload] of Object.entries(
+        input.mcpServers as Record<string, any>,
+      )) {
+        if (!serverPayload.tools) continue;
+        try {
           const tools = await createMcpProxyTools(serverName, serverPayload.tools);
           mcpTools.push(...tools);
+        } catch (err: any) {
+          console.error(`Failed to load mcp proxy tools for ${serverName}:`, err);
+          yield { type: "error", message: `Failed to initialize MCP server '${serverName}': ${err.message}`, jobId: input.jobId } as ChatStreamEvent;
         }
-      } catch (err) {
-        console.error("Failed to load mcp proxy tools:", err);
       }
     }
 

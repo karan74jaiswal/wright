@@ -16,7 +16,8 @@ const ALLOWED_ORIGINS = (
   process.env.CORS_ORIGINS || "http://localhost:3000"
 ).split(",");
 app.use(cors({ origin: ALLOWED_ORIGINS }));
-app.use(express.json({ limit: "50mb" }));
+app.use("/api", express.json({ limit: "50mb" }));
+app.use(express.json({ limit: "2mb" }));
 
 const createContext = ({
   req,
@@ -52,6 +53,9 @@ app.get("/", (_req, res) => {
 const ENABLE_DASHBOARD = process.env.ENABLE_BULL_DASHBOARD === "true"; 
 if (ENABLE_DASHBOARD) {
   app.use("/admin/queues", (req, res, next) => {
+    if (req.hostname !== "localhost" && req.hostname !== "127.0.0.1") {
+      return res.status(403).send("Dashboard is restricted to local interface.");
+    }
     const b64auth = (req.headers.authorization || "").split(" ")[1] || "";
     const [login, password] = Buffer.from(b64auth, "base64").toString().split(":");
     const expectedPassword = process.env.BULL_BOARD_PASSWORD;
@@ -85,9 +89,26 @@ setupCheckpointer()
 // Graceful shutdown
 const shutdown = async () => {
   console.log("Chat service shutting down gracefully...");
-  server.close(() => {
-    console.log("Chat service stopped.");
+  
+  const closePromise = new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
   });
+
+  try {
+    await Promise.race([
+      closePromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000))
+    ]);
+  } catch (e) {
+    console.log("Forcing close of lingering HTTP connections...");
+    if (server.closeAllConnections) server.closeAllConnections();
+  }
+  
+  console.log("Chat service stopped.");
+
   try {
     await shutdownCheckpointer();
   } catch (e) {

@@ -1,4 +1,4 @@
 import "./env";
 import { startWorker } from "./worker";
 
-startWorker();
+startWorker().catch(console.error);

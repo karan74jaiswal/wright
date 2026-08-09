@@ -12,7 +12,7 @@ export function matchRule(pattern: string, actual: string, isCommand: boolean = 
 
   if (isCommand) {
     // Reject shell control operators in the actual target to prevent chaining bypasses via pattern match
-    const controlOperators = /(&&|\|\||;|\||&|\n|\$\(|`)/;
+    const controlOperators = /(&&|\|\||;|\||&|\n|\r|>|<|\$\(|\$\{|`|\{|\})/;
     if (controlOperators.test(actual)) {
       return false;
     }
@@ -23,6 +23,14 @@ export function matchRule(pattern: string, actual: string, isCommand: boolean = 
 
   // Use minimatch for any pattern containing wildcards
   if (pattern.includes("*") || pattern.includes("?")) {
+    if (isCommand) {
+      // Command-native wildcards: * matches anything including slashes
+      const regexStr = pattern
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*")
+        .replace(/\?/g, ".");
+      return new RegExp(`^${regexStr}$`).test(actual);
+    }
     return minimatch(actual, pattern, { dot: true });
   }
 

@@ -29,6 +29,13 @@ export const getCurrentMcps = () => currentMcpsList;
 
 export let globalMcpClient: any = null;
 
+let reconfigurationPromise: Promise<void> | null = null;
+export const waitForMcpReady = async () => {
+  if (reconfigurationPromise) {
+    await reconfigurationPromise;
+  }
+};
+
 // Track active tool calls to prevent killing the client mid-execution
 export let activeMcpToolCalls = 0;
 export const incrementMcpToolCall = () => activeMcpToolCalls++;
@@ -45,6 +52,16 @@ export default function McpProvider({ children }: { children: ReactNode }) {
       currentMcpsList = Array.from(discovered.keys());
 
       if (discovered.size === 0) {
+        if (globalMcpClient) {
+          try {
+            await globalMcpClient.close();
+          } catch (e) {
+            console.error("Failed to close old MCP client:", e);
+          }
+          globalMcpClient = null;
+        }
+        previousConfigString = "";
+        previousDiscovered = discovered;
         return { discovered };
       }
 
@@ -66,56 +83,79 @@ export default function McpProvider({ children }: { children: ReactNode }) {
         return { discovered: previousDiscovered };
       }
 
-      if (globalMcpClient) {
-        try {
-          await globalMcpClient.close();
-        } catch (e) {
-          console.error("Failed to close old MCP client:", e);
-        }
-      }
+      let resolveReconfiguration: (() => void) | null = null;
+      reconfigurationPromise = new Promise((resolve) => {
+        resolveReconfiguration = resolve;
+      });
 
-      const { MultiServerMCPClient } = await import("@langchain/mcp-adapters");
-      globalMcpClient = new MultiServerMCPClient(configObj);
-      previousConfigString = configString;
-
-      for (const [key, server] of discovered.entries()) {
-        try {
-          const rawClient = await globalMcpClient.getClient(key);
-          if (rawClient) {
-            const res = await rawClient.listTools();
-            server.tools = res.tools;
+      try {
+        if (globalMcpClient) {
+          try {
+            await globalMcpClient.close();
+          } catch (e) {
+            console.error("Failed to close old MCP client:", e);
           }
-        } catch (e: any) {
-          // Dynamic Protocol Negotiation: If SSE fails with 405 Method Not Allowed,
-          // the server likely expects the stateless HTTP transport instead.
-          if (server.config.type === "sse" && e.message?.includes("405")) {
-            try {
-              // Mutate the config so the backend will also use the corrected transport
+        }
+
+        const { MultiServerMCPClient } = await import("@langchain/mcp-adapters");
+        globalMcpClient = new MultiServerMCPClient(configObj);
+        previousConfigString = configString;
+
+        const fallbackNeeded: string[] = [];
+
+        for (const [key, server] of discovered.entries()) {
+          try {
+            const rawClient = await globalMcpClient.getClient(key);
+            if (rawClient) {
+              const res = await rawClient.listTools();
+              server.tools = res.tools;
+            }
+          } catch (e: any) {
+            // Dynamic Protocol Negotiation: If SSE fails with 405 Method Not Allowed,
+            // the server likely expects the stateless HTTP transport instead.
+            const status = e.status || e.response?.status;
+            const is405 = status === 405 || e.message?.includes("405");
+            
+            if (server.config.type === "sse" && is405) {
               server.config.type = "http";
               configObj[key] = server.config;
-              
-              // Issue 3 Fix: Close the global client before replacing it with the fallback
-              if (globalMcpClient) {
-                try {
-                  await globalMcpClient.close();
-                } catch (closeErr) {}
-              }
-              
-              globalMcpClient = new MultiServerMCPClient(configObj);
-              
+              fallbackNeeded.push(key);
+            } else {
+              console.error(`Failed to fetch tools for ${key}:`, e);
+              server.tools = [];
+            }
+          }
+        }
+
+        // Issue 3 Fix: Collect the transport corrections during the loop, 
+        // then rebuild the client once after the loop.
+        if (fallbackNeeded.length > 0) {
+          if (globalMcpClient) {
+            try {
+              await globalMcpClient.close();
+            } catch (e) {
+              console.error("Failed to close MCP client before fallback rebuild:", e);
+            }
+          }
+          globalMcpClient = new MultiServerMCPClient(configObj);
+          
+          for (const key of fallbackNeeded) {
+            try {
               const fallbackClient = await globalMcpClient.getClient(key);
               if (fallbackClient) {
                 const res = await fallbackClient.listTools();
-                server.tools = res.tools;
-                continue; // Successfully negotiated
+                discovered.get(key)!.tools = res.tools;
               }
             } catch (fallbackError) {
               console.error(`[Wright MCP] Failed to connect to ${key} after falling back to HTTP transport:`, fallbackError);
+              discovered.get(key)!.tools = [];
             }
-          } else {
-            console.error(`Failed to fetch tools for ${key}:`, e);
           }
-          server.tools = [];
+        }
+      } finally {
+        if (resolveReconfiguration) {
+          resolveReconfiguration();
+          reconfigurationPromise = null;
         }
       }
 

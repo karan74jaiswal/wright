@@ -11,12 +11,12 @@ const workerCancelEmitter = new EventEmitter();
 workerCancelEmitter.setMaxListeners(1000);
 
 const globalCancelSubClient = createRedisClient();
-globalCancelSubClient.psubscribe("chat_cancel:*", "chat_ready_pubsub:*").catch(console.error);
 globalCancelSubClient.on("pmessage", (pattern, channel, message) => {
   workerCancelEmitter.emit(channel, message);
 });
 
-export function startWorker() {
+export async function startWorker() {
+  await globalCancelSubClient.psubscribe("chat_cancel:*", "chat_ready_pubsub:*");
   console.log("Starting chat worker...");
 
   const worker = new Worker(
@@ -29,41 +29,48 @@ export function startWorker() {
       const { sessionId } = input;
       console.log(`Processing job ${job.id} for session ${sessionId}...`);
 
-      const cancelState = await redis.get(`chat_cancel_state:${sessionId}:${input.jobId}`);
-      if (cancelState === "CANCEL") {
-        console.log(`Job ${job.id} was cancelled before execution started.`);
-        return;
-      }
-
-      // Explicit handshake: Wait up to 5 seconds for the SSE to connect
-      const isReady = await redis.get(`chat_ready:${sessionId}:${input.jobId}`);
-      if (!isReady) {
-        console.log(`Waiting for SSE to connect for session ${sessionId}...`);
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(() => {
-            workerCancelEmitter.off(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
-            resolve();
-          }, 5000);
-          
-          const onReady = () => {
-            clearTimeout(timeout);
-            resolve();
-          };
-          workerCancelEmitter.once(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
-        });
-      }
-
       const channel = `chat_stream:${sessionId}:${input.jobId}`;
       const cancelChannel = `chat_cancel:${sessionId}:${input.jobId}`;
       const ac = new AbortController();
 
-      // Subscribe to cancellation events using the global emitter
+      // Subscribe to cancellation events using the global emitter BEFORE waiting
       const onCancel = () => {
         ac.abort();
       };
       workerCancelEmitter.on(cancelChannel, onCancel);
 
       try {
+        let cancelState = await redis.get(`chat_cancel_state:${sessionId}:${input.jobId}`);
+        if (cancelState === "CANCEL") {
+          console.log(`Job ${job.id} was cancelled before execution started.`);
+          return;
+        }
+
+        // Explicit handshake: Wait up to 5 seconds for the SSE to connect
+        const isReady = await redis.get(`chat_ready:${sessionId}:${input.jobId}`);
+        if (!isReady) {
+          console.log(`Waiting for SSE to connect for session ${sessionId}...`);
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => {
+              workerCancelEmitter.off(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
+              resolve();
+            }, 5000);
+            
+            const onReady = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            workerCancelEmitter.once(`chat_ready_pubsub:${sessionId}:${input.jobId}`, onReady);
+          });
+        }
+
+        // Re-read chat_cancel_state after listener is active and wait is complete
+        cancelState = await redis.get(`chat_cancel_state:${sessionId}:${input.jobId}`);
+        if (cancelState === "CANCEL" || ac.signal.aborted) {
+          console.log(`Job ${job.id} was cancelled during readiness wait.`);
+          return;
+        }
+
         const stream = streamAgent(input, ac.signal);
         let wasInterrupted = false;
         let hasEmittedTerminal = false;

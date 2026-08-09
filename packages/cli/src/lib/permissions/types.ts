@@ -10,4 +10,5 @@ export interface PermissionRule {
 export interface PermissionCheckResult {
   allowed: boolean;
   rule?: PermissionRule;
+  resolvedPath?: string;
 }

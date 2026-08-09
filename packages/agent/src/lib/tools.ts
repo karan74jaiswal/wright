@@ -16,7 +16,7 @@ export const readFileTool = tool(
     });
     const resStr = String(result);
     if (resStr === "Cancel" || resStr === "__CANCELLED__")
-      throw new Error(`User denied permission for read_file(${path})`);
+      return `User denied permission for read_file(${path})`;
     return resStr;
   },
   {
@@ -39,7 +39,7 @@ export const writeFileTool = tool(
     });
     const resStr = String(result);
     if (resStr === "Cancel" || resStr === "__CANCELLED__")
-      throw new Error(`User denied permission for write_file(${path})`);
+      return `User denied permission for write_file(${path})`;
     return resStr;
   },
   {
@@ -64,7 +64,7 @@ export const runCommandTool = tool(
     });
     const resStr = String(result);
     if (resStr === "Cancel" || resStr === "__CANCELLED__")
-      throw new Error(`User denied permission for run_command(${command})`);
+      return `User denied permission for run_command(${command})`;
     return resStr;
   },
   {
@@ -88,7 +88,7 @@ export const listDirectoryTool = tool(
     });
     const resStr = String(result);
     if (resStr === "Cancel" || resStr === "__CANCELLED__")
-      throw new Error(`User denied permission for list_directory(${path})`);
+      return `User denied permission for list_directory(${path})`;
     return resStr;
   },
   {
@@ -141,7 +141,7 @@ export const askPermission = tool(
     });
     const resStr = String(humanDecision);
     if (resStr === "No, reject" || resStr === "Cancel")
-      throw new Error(`User denied permission for ask_permission(${target})`);
+      return `User denied permission for ask_permission(${target})`;
     return resStr;
   },
   {
@@ -166,8 +166,7 @@ export const askPermission = tool(
  * We override the actual execution to throw an interrupt so the frontend can execute it.
  */
 export async function createMcpProxyTools(serverName: string, mcpToolsPayload: any[]) {
-  try {
-    const { loadMcpTools } = await import("@langchain/mcp-adapters");
+  const { loadMcpTools } = await import("@langchain/mcp-adapters");
     
     // A dummy client is required to initialize the adapter
     const dummyClient = {
@@ -188,40 +187,39 @@ export async function createMcpProxyTools(serverName: string, mcpToolsPayload: a
           ? input.args 
           : input;
 
+        const validatedArgs = await t.schema.parseAsync(actualArgs);
+
         const res = interrupt({
           type: "invoke_mcp",
           serverName,
           toolName: t.name,
-          args: actualArgs,
+          args: validatedArgs,
         });
+
+        let finalOutput = res;
         if (res === "__CANCELLED__" || res === "Cancel") {
-          throw new Error(`User denied permission for ${t.name}`);
+          finalOutput = `User denied permission for ${t.name}`;
         }
 
         if (input && typeof input === "object" && input.id) {
           return new ToolMessage({
-            content: typeof res === "string" ? res : JSON.stringify(res),
+            content: typeof finalOutput === "string" ? finalOutput : JSON.stringify(finalOutput),
             name: t.name,
             tool_call_id: input.id,
           });
         }
-        return res;
+        return finalOutput;
       };
     }
     return tools;
-  } catch (err) {
-    console.error(`Failed to initialize MCP proxy tools for ${serverName}:`, err);
-    return [];
-  }
 }
 
 export const askQuestion = tool(
-  async ({ question, options, isMultiSelect }) => {
+  async ({ question, options }) => {
     const humanDecision = interrupt({
       type: "ask_question",
       question,
       options,
-      isMultiSelect,
     });
     return String(humanDecision);
   },
@@ -235,10 +233,6 @@ export const askQuestion = tool(
         .array(z.string())
         .min(1)
         .describe("The options to present to the user"),
-      isMultiSelect: z
-        .boolean()
-        .optional()
-        .describe("If true, the user can select multiple options"),
     }),
   },
 );

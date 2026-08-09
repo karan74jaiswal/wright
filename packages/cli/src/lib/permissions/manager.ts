@@ -34,7 +34,7 @@ export class PermissionManager {
     }
   }
 
-  public static async grant(toolName: string, targetPattern: string, scope: PermissionScope, sessionId?: string) {
+  public static async grant(toolName: string, targetPattern: string, scope: PermissionScope, sessionId: string = "default-session") {
     const rule: PermissionRule = {
       toolName,
       targetPattern,
@@ -43,10 +43,8 @@ export class PermissionManager {
     };
 
     if (scope === "session") {
-      if (sessionId) {
-        if (!this.sessionRules[sessionId]) this.sessionRules[sessionId] = [];
-        this.sessionRules[sessionId].push(rule);
-      }
+      if (!this.sessionRules[sessionId]) this.sessionRules[sessionId] = [];
+      this.sessionRules[sessionId].push(rule);
     } else if (scope === "system") {
       const sysRules = await this.loadSystemRules();
       sysRules.push(rule);
@@ -57,14 +55,22 @@ export class PermissionManager {
   /**
    * Checks if a specific tool and target are allowed.
    */
-  public static async check(toolName: string, target: string, activeCwd: string, sessionId?: string): Promise<PermissionCheckResult> {
+  public static async check(toolName: string, target: string, activeCwd: string, sessionId: string = "default-session"): Promise<PermissionCheckResult> {
     // 1. Safe auto-grant for read operations inside the workspace
     if ((toolName === "read_file" || toolName === "list_directory") && target) {
       const resolvedTarget = path.resolve(activeCwd, target);
       
       // Explicitly block high-risk files even inside the workspace
       const filename = path.basename(resolvedTarget).toLowerCase();
-      const isHighRisk = filename === ".env" || filename.endsWith(".pem") || filename.includes("id_rsa");
+      const isHighRisk =
+        filename === ".env" ||
+        filename.startsWith(".env.") ||
+        filename.endsWith(".pem") ||
+        filename.endsWith(".key") ||
+        filename.endsWith(".p12") ||
+        filename.endsWith(".pfx") ||
+        filename === ".npmrc" ||
+        /^id_(rsa|dsa|ecdsa|ed25519)/.test(filename);
       
       if (!isHighRisk) {
         try {
@@ -73,7 +79,7 @@ export class PermissionManager {
           const realActive = await fs.realpath(activeCwd);
           
           if (realTarget.startsWith(realActive + path.sep) || realTarget === realActive) {
-            return { allowed: true }; // Auto-granted
+            return { allowed: true, resolvedPath: realTarget }; // Auto-granted
           }
         } catch (e) {
           // If realpath fails (e.g. file doesn't exist), fall through to standard rules
@@ -82,7 +88,7 @@ export class PermissionManager {
     }
 
     // 2. Check Session Rules (Project-level)
-    const activeSessionRules = sessionId ? (this.sessionRules[sessionId] || []) : [];
+    const activeSessionRules = this.sessionRules[sessionId] || [];
     for (const rule of activeSessionRules) {
       if (rule.toolName === toolName && matchRule(rule.targetPattern, target, toolName === "run_command")) {
         return { allowed: true, rule };

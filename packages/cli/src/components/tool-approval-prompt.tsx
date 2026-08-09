@@ -51,10 +51,11 @@ export function ToolApprovalPrompt({
       pendingApproval.toolName === "invoke_mcp" &&
       pendingApproval.target
     ) {
-      const parts = pendingApproval.target.split(".");
-      if (parts.length > 1) {
-        wildcard = `${parts[0]}.*`;
-        wildcardDesc = `Allow all tools on '${parts[0]}' server`;
+      const lastDot = pendingApproval.target.lastIndexOf(".");
+      if (lastDot > 0) {
+        const serverName = pendingApproval.target.slice(0, lastDot);
+        wildcard = `${serverName}.*`;
+        wildcardDesc = `Allow all tools on '${serverName}' server`;
       }
     } else if (pendingApproval.target && pendingApproval.target.includes("/")) {
       const dir = pendingApproval.target.substring(
@@ -114,6 +115,14 @@ export function ToolApprovalPrompt({
       if ((key as any).stopPropagation) (key as any).stopPropagation();
 
       const selection = options[selectedIndex];
+      if (!selection) return;
+
+      onResolve(selection.value, selection.wildcard);
+    } else if (/^[1-9]$/.test(key.name ?? "")) {
+      if ((key as any).preventDefault) (key as any).preventDefault();
+      if ((key as any).stopPropagation) (key as any).stopPropagation();
+
+      const selection = options[Number(key.name) - 1];
       if (!selection) return;
 
       onResolve(selection.value, selection.wildcard);
