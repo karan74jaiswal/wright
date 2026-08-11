@@ -165,53 +165,159 @@ export const askPermission = tool(
  * We use @langchain/mcp-adapters strictly to convert MCP JSON schemas into Zod schemas.
  * We override the actual execution to throw an interrupt so the frontend can execute it.
  */
-export async function createMcpProxyTools(serverName: string, mcpToolsPayload: any[]) {
+export async function createMcpProxyTools(
+  serverName: string,
+  mcpToolsPayload: any[],
+) {
   const { loadMcpTools } = await import("@langchain/mcp-adapters");
-    
-    // A dummy client is required to initialize the adapter
-    const dummyClient = {
-      listTools: async () => ({ tools: mcpToolsPayload }),
-      callTool: async () => {
-        throw new Error("This should not be called because we override invoke");
-      },
-    };
 
-    const tools = await loadMcpTools(serverName, dummyClient as any);
-    
-    for (const t of tools) {
-      // Override invoke to bypass mcp-adapters' internal try/catch that swallows GraphInterrupt
-      t.invoke = async (input: any) => {
-        // LangGraph's ToolNode passes the full ToolCall object to t.invoke()
-        // We need to extract just the args to pass to the MCP server.
-        const actualArgs = (input && typeof input === 'object' && input.type === 'tool_call' && 'args' in input) 
-          ? input.args 
+  // A dummy client is required to initialize the adapter
+  const dummyClient = {
+    listTools: async () => ({ tools: mcpToolsPayload }),
+    callTool: async () => {
+      throw new Error("This should not be called because we override invoke");
+    },
+  };
+
+  const tools = await loadMcpTools(serverName, dummyClient as any);
+
+  for (const t of tools) {
+    // Override invoke to bypass mcp-adapters' internal try/catch that swallows GraphInterrupt
+    t.invoke = async (input: any) => {
+      console.log("[WRIGHT-DEBUG] t.invoke STARTED FOR:", t.name);
+      
+      // LangGraph's ToolNode passes the full ToolCall object to t.invoke()
+      // We need to extract just the args to pass to the MCP server.
+      const actualArgs =
+        input &&
+        typeof input === "object" &&
+        input.type === "tool_call" &&
+        "args" in input
+          ? input.args
           : input;
 
-        const validatedArgs = await t.schema.parseAsync(actualArgs);
+      const res = interrupt({
+        type: "invoke_mcp",
+        serverName,
+        toolName: t.name,
+        args: actualArgs,
+      });
 
-        const res = interrupt({
-          type: "invoke_mcp",
-          serverName,
-          toolName: t.name,
-          args: validatedArgs,
+      let finalOutput = res;
+      if (res === "__CANCELLED__" || res === "Cancel") {
+        finalOutput = `User denied permission for ${t.name}`;
+      }
+
+      if (input && typeof input === "object" && input.id) {
+        let processedContent: any = "";
+        let isError = false;
+        
+        console.log("[WRIGHT-DEBUG] MCP TOOL RESULT RECEIVED IN BACKEND: ", typeof finalOutput, finalOutput);
+        
+        // If it got stringified during the TRPC/Redis network hop, aggressively parse it back.
+        // Some network layers double-stringify JSON, so we unwrap it in a loop until it's an object.
+        while (typeof finalOutput === "string") {
+          try {
+            const parsed = JSON.parse(finalOutput);
+            if (typeof parsed === "string") {
+              if (parsed === finalOutput) break; // prevent infinite loops
+              finalOutput = parsed;
+            } else if (parsed && typeof parsed === "object") {
+              finalOutput = parsed;
+              break;
+            } else {
+              break;
+            }
+          } catch (e) {
+            // It's just a regular string, leave it alone
+            break;
+          }
+        }
+        
+        console.log("[WRIGHT-DEBUG] MCP TOOL RESULT UNWRAPPED: ", typeof finalOutput, finalOutput);
+        
+        if (typeof finalOutput === "string") {
+          processedContent = finalOutput;
+        } else if (finalOutput && typeof finalOutput === "object") {
+          isError = finalOutput.isError === true;
+          
+          if (Array.isArray(finalOutput.content)) {
+            const contentArray = finalOutput.content;
+            
+            // Check if ALL blocks are text blocks (no images/audio)
+            const allText = contentArray.every((block: any) => block.type === "text");
+            
+            if (allText) {
+              // Concatenate all text blocks into a single clean string
+              processedContent = contentArray.map((b: any) => b.text).join("\n\n");
+            } else {
+              const mappedBlocks: any[] = [];
+              for (const block of contentArray) {
+                if (block.type === "text") {
+                  mappedBlocks.push({ type: "text", text: block.text });
+                } else if (block.type === "image") {
+                  mappedBlocks.push({
+                    type: "image_url",
+                    image_url: { url: `data:${block.mimeType};base64,${block.data}` },
+                  });
+                } else if (block.type === "audio") {
+                  mappedBlocks.push({
+                    type: "audio",
+                    source_type: "base64",
+                    data: block.data,
+                    mime_type: block.mimeType,
+                  });
+                } else if (block.type === "resource_link") {
+                  mappedBlocks.push({
+                    type: "file",
+                    source_type: "url",
+                    url: block.uri,
+                    mime_type: block.mimeType,
+                  });
+                } else if (block.type === "resource" && block.resource) {
+                  const res = block.resource;
+                  if ("blob" in res && res.blob != null) {
+                    mappedBlocks.push({
+                      type: "file",
+                      source_type: "base64",
+                      data: res.blob,
+                      mime_type: res.mimeType,
+                      ...(res.uri ? { metadata: { uri: res.uri } } : {}),
+                    });
+                  } else if ("text" in res && res.text != null) {
+                    mappedBlocks.push({
+                      type: "file",
+                      source_type: "text",
+                      text: res.text,
+                      mime_type: res.mimeType,
+                      ...(res.uri ? { metadata: { uri: res.uri } } : {}),
+                    });
+                  } else {
+                    mappedBlocks.push(block);
+                  }
+                } else {
+                  mappedBlocks.push(block);
+                }
+              }
+              processedContent = mappedBlocks;
+            }
+          } else {
+            // Fallback for unexpected object structures
+            processedContent = JSON.stringify(finalOutput);
+          }
+        }
+
+        return new ToolMessage({
+          content: processedContent,
+          name: t.name,
+          tool_call_id: input.id,
+          status: isError ? "error" : "success",
         });
-
-        let finalOutput = res;
-        if (res === "__CANCELLED__" || res === "Cancel") {
-          finalOutput = `User denied permission for ${t.name}`;
-        }
-
-        if (input && typeof input === "object" && input.id) {
-          return new ToolMessage({
-            content: typeof finalOutput === "string" ? finalOutput : JSON.stringify(finalOutput),
-            name: t.name,
-            tool_call_id: input.id,
-          });
-        }
-        return finalOutput;
-      };
-    }
-    return tools;
+      }
+      return finalOutput;
+    };
+  }
+  return tools;
 }
 
 export const askQuestion = tool(
