@@ -28,6 +28,7 @@ const sessionLocationSchema = z.object({
   session: z.custom<SessionData>(
     (val) => val !== null && typeof val === "object" && "id" in val,
   ),
+  ephemeralHistory: z.array(z.any()).optional(),
 });
 
 interface ChatMessageProps {
@@ -288,10 +289,22 @@ const SessionInner = ({ id }: { id: string }) => {
   }, [isError, error, navigate, toast]);
 
   // Handle stream state via our robust useChat hook!
-  const initialMessages = useMemo(
-    () => session?.messages ?? [],
-    [session?.messages],
-  );
+  const ephemeralHistory = useMemo(() => {
+    const parsed = sessionLocationSchema.safeParse(location.state);
+    if (!parsed.success) return [];
+    return parsed.data.ephemeralHistory || [];
+  }, [location.state]);
+
+  const initialMessages = useMemo(() => {
+    const dbMessages = session?.messages ?? [];
+    const merged = [...dbMessages, ...ephemeralHistory];
+    merged.sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeA - timeB;
+    });
+    return merged;
+  }, [session?.messages, ephemeralHistory]);
 
   const forceSync = useCallback(async () => {
     // Only send the minimal metadata needed by the backend agent for skills
@@ -347,6 +360,7 @@ const SessionInner = ({ id }: { id: string }) => {
     status,
     interruptPayload,
     sendMessage,
+    executeCommand,
     submitInterrupt,
     stop,
   } = useChat({
@@ -375,7 +389,7 @@ const SessionInner = ({ id }: { id: string }) => {
   }, [history]);
 
   if (!session || !synced)
-    return <SessionShell onSubmit={(_t) => {}} inputDisabled loading />;
+    return <SessionShell onSubmit={(_t) => {}} onExecuteCommand={(_c) => {}} inputDisabled loading />;
 
   const isStreamingAiPresent = !!(
     streamedContent ||
@@ -386,6 +400,7 @@ const SessionInner = ({ id }: { id: string }) => {
   return (
     <SessionShell
       onSubmit={sendMessage}
+      onExecuteCommand={executeCommand}
       onCancel={stop}
       inputDisabled={isLoading}
       loading={isLoading}

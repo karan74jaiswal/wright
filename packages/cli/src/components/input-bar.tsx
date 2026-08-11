@@ -48,7 +48,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
   const toast = useToast();
   const dialog = useDialog();
   const navigate = useNavigate();
-  const { isTopLayer, setResponder } = useKeyboardLayer();
+  const { isTopLayer, setResponder, push } = useKeyboardLayer();
   const { colors } = useTheme();
   const { currentMode } = usePromptConfig();
   const {
@@ -63,9 +63,16 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
 
   const handleTextAreaContentChange = useCallback(() => {
     if (!textAreaRef.current) return;
+    const text = textAreaRef.current.plainText;
 
-    handleContentChange(textAreaRef.current.plainText);
-  }, [handleContentChange]);
+    if (text === "!") {
+      textAreaRef.current.setText("");
+      push("shell");
+      return;
+    }
+
+    handleContentChange(text);
+  }, [handleContentChange, push]);
 
   const handleSubmit = useCallback(() => {
     if (disabled || !textAreaRef.current) return;

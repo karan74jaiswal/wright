@@ -12,6 +12,7 @@ const logDebug = (msg: string) => {
 };
 import { useSubscription } from "@trpc/tanstack-react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { executeClientTool } from "../lib/engine";
 
 import { useTRPC } from "../lib/api-client";
 import { useToast } from "../providers/toast";
@@ -42,6 +43,7 @@ export interface UseChatReturn {
   status: ChatStatus;
   isLoading: boolean;
   sendMessage: (text: string) => void;
+  executeCommand: (cmd: string) => Promise<void>;
   submitInterrupt: (answer: string) => void;
   stop: () => void;
 }
@@ -195,7 +197,13 @@ export function useChat({
       );
 
       // Merge DB messages with remaining optimistic messages
-      return [...initialMessages, ...optimisticMessages];
+      const merged = [...initialMessages, ...optimisticMessages];
+      merged.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      });
+      return merged;
     });
   }, [initialMessages]);
 
@@ -467,6 +475,73 @@ export function useChat({
     [sessionId, status, currentModel, currentMode, toolsHash],
   );
 
+  const executeCommand = useCallback(async (cmd: string) => {
+      // Optimistically add command to UI
+      const cmdId = `temp-cmd-${Date.now()}`;
+      setHistory((prev) => [
+        ...prev,
+        {
+          id: cmdId,
+          sessionId,
+          role: "USER",
+          content: `${cmd}`,
+          model: currentModel,
+          mode: currentMode,
+          status: "COMPLETED",
+          duration: null,
+          reasoning: null,
+          reasoningDuration: null,
+          reasoningEffort: null,
+          toolCalls: null,
+          toolCallId: null,
+          createdAt: new Date().toISOString() as any,
+        }
+      ]);
+
+      try {
+        const output = await executeClientTool("run_command", { command: cmd }, process.cwd());
+        setHistory((prev) => [
+          ...prev,
+          {
+            id: `temp-cmd-res-${Date.now()}`,
+            sessionId,
+            role: "ASSISTANT",
+            content: output,
+            model: currentModel,
+            mode: currentMode,
+            status: "COMPLETED",
+            duration: null,
+            reasoning: null,
+            reasoningDuration: null,
+            reasoningEffort: null,
+            toolCalls: null,
+            toolCallId: null,
+            createdAt: new Date().toISOString() as any,
+          }
+        ]);
+      } catch (err: any) {
+        setHistory((prev) => [
+          ...prev,
+          {
+            id: `temp-cmd-err-${Date.now()}`,
+            sessionId,
+            role: "ERROR",
+            content: String(err.message || err),
+            model: currentModel,
+            mode: currentMode,
+            status: "COMPLETED",
+            duration: null,
+            reasoning: null,
+            reasoningDuration: null,
+            reasoningEffort: null,
+            toolCalls: null,
+            toolCallId: null,
+            createdAt: new Date().toISOString() as any,
+          }
+        ]);
+      }
+    }, [sessionId, currentModel, currentMode]);
+
   const submitInterrupt = useCallback(
     (answerMap: Record<string, any> | any) => {
       console.log(`[use-chat] submitInterrupt called with status=${status}`);
@@ -627,6 +702,7 @@ export function useChat({
       status,
       isLoading,
       sendMessage,
+      executeCommand,
       submitInterrupt,
       stop,
     }),
@@ -639,6 +715,7 @@ export function useChat({
       status,
       isLoading,
       sendMessage,
+      executeCommand,
       submitInterrupt,
       stop,
     ],
