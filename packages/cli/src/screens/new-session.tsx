@@ -24,6 +24,7 @@ const NewSession = () => {
   const toast = useToast();
   const hasStartedRef = useRef(false);
   const [ephemeralHistory, setEphemeralHistory] = useState<any[]>([]);
+  const [isExecutingCommand, setIsExecutingCommand] = useState(false);
   const hasExecutedInitialCommandRef = useRef(false);
   const state = useMemo(() => {
     const parsed = newSessionsStateSchema.safeParse(location.state);
@@ -142,6 +143,7 @@ const NewSession = () => {
 
   const executeCommand = useCallback(
     async (cmd: string) => {
+      setIsExecutingCommand(true);
       const cmdId = `temp-cmd-${Date.now()}`;
       setEphemeralHistory((prev) => [
         ...prev,
@@ -152,6 +154,7 @@ const NewSession = () => {
           model: currentModel,
           mode: currentMode,
           status: "COMPLETED",
+          isCommand: true,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -187,6 +190,8 @@ const NewSession = () => {
             createdAt: new Date().toISOString(),
           },
         ]);
+      } finally {
+        setIsExecutingCommand(false);
       }
     },
     [currentModel, currentMode],
@@ -256,6 +261,7 @@ const NewSession = () => {
           });
         },
         onError: (err) => {
+          hasStartedRef.current = false;
           toast.show({
             variant: ToastVariant.ERROR,
             message: err.message || "Failed to create session",
@@ -270,9 +276,9 @@ const NewSession = () => {
       onSubmit={handleSubmit}
       onExecuteCommand={executeCommand}
       inputDisabled={
-        createSessionMutation.isPending || syncConfigMutation.isPending
+        createSessionMutation.isPending || syncConfigMutation.isPending || isExecutingCommand
       }
-      loading={createSessionMutation.isPending || syncConfigMutation.isPending}
+      loading={createSessionMutation.isPending || syncConfigMutation.isPending || isExecutingCommand}
     >
       {state.isCommand ? (
         ephemeralHistory.map((msg) => {

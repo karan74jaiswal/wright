@@ -219,7 +219,7 @@ export function useChat({
     // console.log(hasAutoResumedRef);
     if (history.length > 0 && !hasAutoResumedRef.current) {
       const lastMsg = history[history.length - 1];
-      if (lastMsg && lastMsg.role === "USER" && status === "idle") {
+      if (lastMsg && lastMsg.role === "USER" && !(lastMsg as any).isCommand && status === "idle") {
         hasAutoResumedRef.current = true;
         setStatus("streaming");
         const newJobId = globalThis.crypto.randomUUID();
@@ -516,6 +516,7 @@ export function useChat({
           model: currentModel,
           mode: currentMode,
           status: "COMPLETED",
+          isCommand: true,
           duration: null,
           reasoning: null,
           reasoningDuration: null,

@@ -42,6 +42,7 @@ export interface ScannerCache {
 export class WorkspaceScanner {
   private cache: ScannerCache = { files: [], directories: [] };
   private rootDir: string;
+  private canonicalRootDir: string | null = null;
   private fileCount = 0;
   private isScanning = false;
   private watcher: fs.FSWatcher | null = null;
@@ -145,9 +146,30 @@ export class WorkspaceScanner {
 
   // Phase 1 - Lazy Traversal Function
   public async readDirLazy(targetPath: string): Promise<string[]> {
-    const fullTargetPath = path.join(this.rootDir, targetPath);
-    // Basic security to ensure it doesn't escape root
-    if (!fullTargetPath.startsWith(this.rootDir)) return [];
+    let fullTargetPath: string;
+    try {
+      if (!this.canonicalRootDir) {
+        this.canonicalRootDir = await fs.promises.realpath(this.rootDir);
+      }
+      
+      // Resolve true OS paths to defeat symlink escapes
+      const requestedPath = path.resolve(this.canonicalRootDir, targetPath);
+      fullTargetPath = await fs.promises.realpath(requestedPath);
+      
+      const relativePath = path.relative(this.canonicalRootDir, fullTargetPath);
+      
+      // Ensure we haven't traversed up (../) or jumped to a different drive
+      if (
+        relativePath === ".." ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+      ) {
+        return [];
+      }
+    } catch {
+      // realpath throws if the path doesn't exist yet (e.g. while typing)
+      return [];
+    }
 
     let entries: fs.Dirent[];
     try {

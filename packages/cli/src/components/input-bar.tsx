@@ -142,9 +142,9 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
         const isDir = file.endsWith("/");
         const suffix = isDir ? "" : " ";
 
-        // Wrap in quotes if there are spaces
+        // Wrap in quotes if there are spaces. If it's a directory, leave quote open for continuation.
         const hasSpaces = file.includes(" ");
-        const formattedFile = hasSpaces ? `"${file}"` : file;
+        const formattedFile = hasSpaces ? (isDir ? `"${file}` : `"${file}"`) : file;
 
         // Preserve the leading space if the match had one
         const prefix = match[0].match(/^\s/) ? match[0].charAt(0) : "";
