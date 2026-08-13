@@ -32,7 +32,13 @@ const buildTools = [
   askPermission,
   askQuestion,
 ];
-const planTools = [readFileTool, listDirectoryTool, runCommandTool, invokeSkillTool, askQuestion]; // Read-only tools + clarification
+const planTools = [
+  readFileTool,
+  listDirectoryTool,
+  runCommandTool,
+  invokeSkillTool,
+  askQuestion,
+]; // Read-only tools + clarification
 
 // Node: Agent
 const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
@@ -78,14 +84,26 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
 
   const modelWithTools = model.bindTools(tools);
 
-  const skills = config?.configurable?.skills as Record<string, any> | undefined;
-  const mcpServers = config?.configurable?.mcpServers as Record<string, any> | undefined;
+  const skills = config?.configurable?.skills as
+    | Record<string, any>
+    | undefined;
+  const mcpServers = config?.configurable?.mcpServers as
+    | Record<string, any>
+    | undefined;
+  const mentions = config?.configurable?.mentions as string[] | undefined;
 
   // Always ensure the system prompt matches the current mode.
   // If the first message is a system message, replace it (mode may have changed).
   // Otherwise, prepend the system prompt.
   let messages = state.messages;
-  const systemPrompt = buildSystemPrompt({ mode, sessionCwd, activeCwd, skills, mcpServers });
+  const systemPrompt = buildSystemPrompt({
+    mode,
+    sessionCwd,
+    activeCwd,
+    skills,
+    mcpServers,
+    mentions,
+  });
   if (messages.length === 0) {
     messages = [systemPrompt];
   } else if (
@@ -103,16 +121,20 @@ const callModel = async (state: AgentStateType, config?: RunnableConfig) => {
   return { messages: [response] };
 };
 
-
-
-const executeBuildTools = async (state: AgentStateType, config?: RunnableConfig) => {
+const executeBuildTools = async (
+  state: AgentStateType,
+  config?: RunnableConfig,
+) => {
   const mcpTools = (config?.configurable?.mcpTools || []) as any[];
   const allTools = [...buildTools, ...mcpTools];
   const node = new ToolNode(allTools, { handleToolErrors: true });
   return node.invoke(state, config);
 };
 
-const executePlanTools = async (state: AgentStateType, config?: RunnableConfig) => {
+const executePlanTools = async (
+  state: AgentStateType,
+  config?: RunnableConfig,
+) => {
   const mcpTools = (config?.configurable?.mcpTools || []) as any[];
   const allTools = [...planTools, ...mcpTools];
   const node = new ToolNode(allTools, { handleToolErrors: true });

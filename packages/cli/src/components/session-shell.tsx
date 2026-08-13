@@ -1,6 +1,7 @@
 import { type PropsWithChildren, useCallback } from "react";
 
 import { InputBar } from "./input-bar";
+import { ShellBar } from "./shell-bar";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 
@@ -10,6 +11,7 @@ import { usePromptConfig } from "../providers/prompt-config";
 
 export interface SessionShellProps extends PropsWithChildren {
   onSubmit(text: string): void;
+  onExecuteCommand(cmd: string): void;
   onCancel?(): void;
   inputDisabled?: boolean;
   loading?: boolean;
@@ -18,6 +20,7 @@ export interface SessionShellProps extends PropsWithChildren {
 const SessionShell = ({
   children,
   onSubmit,
+  onExecuteCommand,
   onCancel,
   inputDisabled = false,
   loading = false,
@@ -53,7 +56,11 @@ const SessionShell = ({
         <box gap={1}>{children}</box>
       </scrollbox>
       <box flexShrink={0}>
-        <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
+        {isTopLayer("shell") ? (
+          <ShellBar onExecute={onExecuteCommand} disabled={inputDisabled} />
+        ) : (
+          <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
+        )}
       </box>
       <box
         flexShrink={0}

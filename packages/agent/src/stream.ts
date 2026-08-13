@@ -4,6 +4,8 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { Command } from "@langchain/langgraph";
 import { prisma as db } from "@wright/database/client";
 import { Role, MessageStatus, Mode } from "@wright/database/enums";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export async function* streamAgent(
   input: ChatRequest & {
@@ -134,6 +136,7 @@ export async function* streamAgent(
         mcpTools,
         skills: input.skills || {},
         mcpServers: input.mcpServers,
+        mentions: input.mentions,
       },
     };
 

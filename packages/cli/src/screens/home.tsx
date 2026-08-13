@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import Header from "../components/header";
 import { InputBar } from "../components/input-bar";
+import { ShellBar } from "../components/shell-bar";
 import { useTheme } from "../providers/theme";
 import { useNavigate } from "react-router";
 import { usePromptConfig } from "../providers/prompt-config";
@@ -33,6 +34,19 @@ export default function Home() {
     [navigate],
   );
 
+  const handleExecute = useCallback(
+    (text: string) => {
+      navigate("/sessions/new", {
+        state: {
+          message: text,
+          isCommand: true,
+        },
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
   return (
     <box
       alignItems="center"
@@ -46,7 +60,11 @@ export default function Home() {
     >
       <Header />
       <box width="100%" maxWidth={78} paddingX={2} flexDirection="column" gap={1}>
-        <InputBar onSubmit={handleSubmit} />
+        {isTopLayer("shell") ? (
+          <ShellBar onExecute={handleExecute} />
+        ) : (
+          <InputBar onSubmit={handleSubmit} />
+        )}
         <box flexDirection="row" gap={1} marginLeft="auto">
           <text>tab</text>
           <text attributes={TextAttributes.DIM}>agents</text>

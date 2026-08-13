@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { UserMsg } from "../components/messages";
+import { UserMsg, BotMsg } from "../components/messages";
 import SessionShell from "../components/session-shell";
 import { z } from "zod";
 import { useTRPC } from "../lib/api-client";
@@ -11,9 +11,11 @@ import { ToastVariant } from "../providers/toast/types";
 import { usePromptConfig } from "../providers/prompt-config";
 import { useSkills } from "../providers/skills";
 import { useMcp } from "../providers/mcp";
+import { executeClientTool } from "../lib/engine";
 
 const newSessionsStateSchema = z.object({
   message: z.string(),
+  isCommand: z.boolean().optional(),
 });
 
 const NewSession = () => {
@@ -21,6 +23,9 @@ const NewSession = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const hasStartedRef = useRef(false);
+  const [ephemeralHistory, setEphemeralHistory] = useState<any[]>([]);
+  const [isExecutingCommand, setIsExecutingCommand] = useState(false);
+  const hasExecutedInitialCommandRef = useRef(false);
   const state = useMemo(() => {
     const parsed = newSessionsStateSchema.safeParse(location.state);
     if (!parsed.success) return null;
@@ -49,7 +54,14 @@ const NewSession = () => {
   );
 
   useEffect(() => {
-    if (!state || hasStartedRef.current || isSkillsLoading || isMcpLoading)
+    // DO NOT trigger mutation if it's an ephemeral command
+    if (
+      !state ||
+      hasStartedRef.current ||
+      isSkillsLoading ||
+      isMcpLoading ||
+      state.isCommand
+    )
       return;
     hasStartedRef.current = true;
 
@@ -75,9 +87,11 @@ const NewSession = () => {
                   {
                     name: skill.name,
                     path: skill.skillFilePath,
-                    description: skill.frontmatter.description || "No description provided.",
+                    description:
+                      skill.frontmatter.description ||
+                      "No description provided.",
                   },
-                ])
+                ]),
               ),
               enabledMcps: Object.fromEntries(
                 Array.from(servers.entries()).map(([key, server]) => [
@@ -88,7 +102,7 @@ const NewSession = () => {
                     source: server.source,
                     tools: server.tools || [],
                   },
-                ])
+                ]),
               ),
             });
           } catch (e) {
@@ -127,13 +141,155 @@ const NewSession = () => {
     providerApiKeys,
   ]);
 
+  const executeCommand = useCallback(
+    async (cmd: string) => {
+      setIsExecutingCommand(true);
+      const cmdId = `temp-cmd-${Date.now()}`;
+      setEphemeralHistory((prev) => [
+        ...prev,
+        {
+          id: cmdId,
+          role: "USER",
+          content: `${cmd}`,
+          model: currentModel,
+          mode: currentMode,
+          status: "COMPLETED",
+          isCommand: true,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+
+      try {
+        const output = await executeClientTool(
+          "run_command",
+          { command: cmd },
+          process.cwd(),
+        );
+        setEphemeralHistory((prev) => [
+          ...prev,
+          {
+            id: `temp-cmd-res-${Date.now()}`,
+            role: "ASSISTANT",
+            content: output,
+            model: currentModel,
+            mode: currentMode,
+            status: "COMPLETED",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } catch (err: any) {
+        setEphemeralHistory((prev) => [
+          ...prev,
+          {
+            id: `temp-cmd-err-${Date.now()}`,
+            role: "ERROR",
+            content: String(err.message || err),
+            model: currentModel,
+            mode: currentMode,
+            status: "COMPLETED",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } finally {
+        setIsExecutingCommand(false);
+      }
+    },
+    [currentModel, currentMode],
+  );
+
+  useEffect(() => {
+    if (state?.isCommand && !hasExecutedInitialCommandRef.current) {
+      hasExecutedInitialCommandRef.current = true;
+      executeCommand(state.message);
+    }
+  }, [state, executeCommand]);
+
   if (!state?.message) return null;
 
-  const handleSubmit = () => {};
+  const handleSubmit = (text: string) => {
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
+
+    // Initiate creation with this new message
+    createSessionMutation.mutate(
+      {
+        title: text.slice(0, 100),
+        cwd: process.cwd(),
+        initialMessage: {
+          content: text,
+          model: currentModel,
+          mode: currentMode,
+          role: "USER",
+        },
+      },
+      {
+        onSuccess: async (session) => {
+          try {
+            await syncConfigMutation.mutateAsync({
+              sessionId: session.id,
+              enabledSkills: Object.fromEntries(
+                Array.from(discoveredSkills.entries()).map(([key, skill]) => [
+                  key,
+                  {
+                    name: skill.name,
+                    path: skill.skillFilePath,
+                    description:
+                      skill.frontmatter.description ||
+                      "No description provided.",
+                  },
+                ]),
+              ),
+              enabledMcps: Object.fromEntries(
+                Array.from(servers.entries()).map(([key, server]) => [
+                  key,
+                  {
+                    name: server.name,
+                    config: server.config,
+                    source: server.source,
+                    tools: server.tools || [],
+                  },
+                ]),
+              ),
+            });
+          } catch (e) {
+            console.error("Failed to sync session config", e);
+          }
+
+          navigate(`/sessions/${session.id}`, {
+            state: { session, ephemeralHistory },
+            replace: true,
+          });
+        },
+        onError: (err) => {
+          hasStartedRef.current = false;
+          toast.show({
+            variant: ToastVariant.ERROR,
+            message: err.message || "Failed to create session",
+          });
+        },
+      },
+    );
+  };
 
   return (
-    <SessionShell onSubmit={handleSubmit} inputDisabled loading>
-      <UserMsg message={state.message} />
+    <SessionShell
+      onSubmit={handleSubmit}
+      onExecuteCommand={executeCommand}
+      inputDisabled={
+        createSessionMutation.isPending || syncConfigMutation.isPending || isExecutingCommand
+      }
+      loading={createSessionMutation.isPending || syncConfigMutation.isPending || isExecutingCommand}
+    >
+      {state.isCommand ? (
+        ephemeralHistory.map((msg) => {
+          if (msg.role === "USER") {
+            return <UserMsg key={msg.id} message={msg.content} />;
+          }
+          return <BotMsg key={msg.id} {...msg} />;
+        })
+      ) : (
+        <UserMsg message={state.message} />
+      )}
     </SessionShell>
   );
 };
