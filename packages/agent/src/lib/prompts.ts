@@ -8,6 +8,7 @@ type SystemPromptParams = {
   activeCwd?: string;
   mcpServers?: Record<string, any>;
   skills?: Record<string, any>;
+  mentions?: string[];
 };
 
 export function buildSystemPrompt({
@@ -16,6 +17,7 @@ export function buildSystemPrompt({
   activeCwd,
   mcpServers,
   skills,
+  mentions,
 }: SystemPromptParams): SystemMessage {
   const parts: string[] = [];
   const shell = process.env.SHELL || "bash";
@@ -115,6 +117,12 @@ When a task matches a skill's description, call the \`invoke_skill\` tool with t
 Available skills:
 ${skillList}`);
   }
-
+  if (mentions && mentions.length > 0) {
+    const mentionList = mentions.map((m) => `- ${m}`).join("\n");
+    parts.push(`\n# REFERENCED FILES                                                                                                   
+ The user has explicitly mentioned the following files in their prompt:                                                                 
+${mentionList} 
+If you need to inspect their contents to complete the request, use the \`read_file\` tool to read them dynamically.`);
+  }
   return new SystemMessage(parts.join("\n"));
 }

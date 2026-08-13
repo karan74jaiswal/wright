@@ -16,6 +16,9 @@ import { useTheme } from "../providers/theme";
 import { usePromptConfig } from "../providers/prompt-config";
 import { useNavigate } from "react-router";
 
+import FileMenu from "./file-menu";
+import { useFileMenu } from "./file-menu/use-file-menu";
+
 interface InputBarProps {
   onSubmit: (text: string) => void;
   disabled?: boolean;
@@ -54,12 +57,24 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
   const {
     showCommandMenu,
     commandQuery,
-    selectedIndex,
-    scrollRef,
-    handleContentChange,
+    selectedIndex: commandIndex,
+    scrollRef: commandScrollRef,
+    handleContentChange: handleCommandContentChange,
     resolveCommand,
-    setSelectedIndex,
+    setSelectedIndex: setCommandIndex,
   } = useCommandMenu();
+
+  const {
+    showFileMenu,
+    fileQuery,
+    selectedIndex: fileIndex,
+    scrollRef: fileScrollRef,
+    candidates: fileCandidates,
+    handleContentChange: handleFileContentChange,
+    resolveFile,
+    setSelectedIndex: setFileIndex,
+    close: closeFileMenu,
+  } = useFileMenu();
 
   const handleTextAreaContentChange = useCallback(() => {
     if (!textAreaRef.current) return;
@@ -71,8 +86,9 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
       return;
     }
 
-    handleContentChange(text);
-  }, [handleContentChange, push]);
+    handleCommandContentChange(text);
+    handleFileContentChange(text);
+  }, [handleCommandContentChange, handleFileContentChange, push]);
 
   const handleSubmit = useCallback(() => {
     if (disabled || !textAreaRef.current) return;
@@ -111,6 +127,47 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
     [resolveCommand, handleCommand, disabled],
   );
 
+  const handleFileExecute = useCallback(
+    (index: number) => {
+      if (disabled || !textAreaRef.current) return;
+      const file = resolveFile(index);
+      if (!file) return;
+
+      const currentText = textAreaRef.current.plainText;
+      const match = currentText.match(
+        /(?:^|\s)@(?:"([^"]*)"?|([a-zA-Z0-9.\-_/]*))$/,
+      );
+      if (match) {
+        // If it's a directory, don't append a space so they can keep typing inside it
+        const isDir = file.endsWith("/");
+        const suffix = isDir ? "" : " ";
+
+        // Wrap in quotes if there are spaces
+        const hasSpaces = file.includes(" ");
+        const formattedFile = hasSpaces ? `"${file}"` : file;
+
+        // Preserve the leading space if the match had one
+        const prefix = match[0].match(/^\s/) ? match[0].charAt(0) : "";
+        const newText =
+          currentText.slice(0, currentText.length - match[0].length) +
+          `${prefix}@${formattedFile}${suffix}`;
+
+        textAreaRef.current.setText("");
+        textAreaRef.current.insertText(newText);
+
+        if (!isDir) {
+          closeFileMenu();
+        } else {
+          // Ensure the file menu updates for the new directory
+          handleFileContentChange(newText);
+        }
+      } else {
+        closeFileMenu();
+      }
+    },
+    [resolveFile, disabled, closeFileMenu],
+  );
+
   useEffect(() => {
     setResponder("base", () => {
       if (disabled) return false;
@@ -127,7 +184,6 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
 
   return (
     <box width="100%" alignItems="center" justifyContent="center">
-      {/* <Commands /> */}
       <box
         border={["left"]}
         customBorderChars={SplitBorder.customBorderChars}
@@ -142,7 +198,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
           gap={1}
           backgroundColor={colors.surface}
         >
-          {showCommandMenu && (
+          {(showCommandMenu || showFileMenu) && (
             <box
               position="absolute"
               left={0}
@@ -151,26 +207,47 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
               backgroundColor={colors.surface}
               zIndex={10}
             >
-              <CommandMenu
-                query={commandQuery}
-                selectedIndex={selectedIndex}
-                scrollRef={scrollRef}
-                onSelect={setSelectedIndex}
-                onExecute={handleCommandExecute}
-              />
+              {showCommandMenu && (
+                <CommandMenu
+                  query={commandQuery}
+                  selectedIndex={commandIndex}
+                  scrollRef={commandScrollRef}
+                  onSelect={setCommandIndex}
+                  onExecute={handleCommandExecute}
+                />
+              )}
+              {showFileMenu && (
+                <FileMenu
+                  query={fileQuery}
+                  selectedIndex={fileIndex}
+                  scrollRef={fileScrollRef}
+                  candidates={fileCandidates}
+                  onSelect={setFileIndex}
+                  onExecute={handleFileExecute}
+                />
+              )}
             </box>
           )}
 
           <textarea
-            focused={!disabled && (isTopLayer("base") || isTopLayer("command"))}
+            focused={
+              !disabled &&
+              (isTopLayer("base") ||
+                isTopLayer("command") ||
+                isTopLayer("mention"))
+            }
             ref={textAreaRef}
             placeholder={`Ask anything... "Fix a bug in the database"`}
             onContentChange={handleTextAreaContentChange}
             onSubmit={() => {
               if (disabled) return;
               if (showCommandMenu) {
-                const command = resolveCommand(selectedIndex);
+                const command = resolveCommand(commandIndex);
                 handleCommand(command);
+                return;
+              }
+              if (showFileMenu) {
+                handleFileExecute(fileIndex);
                 return;
               }
               handleSubmit();

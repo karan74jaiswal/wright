@@ -224,6 +224,17 @@ export function useChat({
         setStatus("streaming");
         const newJobId = globalThis.crypto.randomUUID();
         logDebug(`[auto-resume] Starting new job: ${newJobId}`);
+        
+        const mentions: string[] = [];
+        const mentionRegex = /(?:^|\s)@(?:(?:"([^"]+)")|([a-zA-Z0-9.\-_/]+))/g;
+        const matches = Array.from(lastMsg.content.matchAll(mentionRegex));
+        if (matches.length > 0) {
+          for (const match of matches) {
+            if (match[1]) mentions.push(match[1]);
+            else if (match[2]) mentions.push(match[2]);
+          }
+        }
+
         setActiveRequest({
           message: lastMsg.content,
           activeCwd: process.cwd(),
@@ -235,6 +246,7 @@ export function useChat({
           jobId: newJobId,
           sessionId,
           message: lastMsg.content,
+          mentions,
           activeCwd: process.cwd(),
           isAutoResume: true,
           toolsHash,
@@ -260,9 +272,9 @@ export function useChat({
           logDebug(
             `[onData] Event: ${event.type} | JobId: ${event.jobId} | activeReq: ${activeRequestRef.current?.jobId}`,
           );
-          console.log(
-            `[use-chat] Received event: ${event.type} (jobId: ${event.jobId}, activeRequest: ${activeRequestRef.current?.jobId})`,
-          );
+          // console.log(
+          //   `[use-chat] Received event: ${event.type} (jobId: ${event.jobId}, activeRequest: ${activeRequestRef.current?.jobId})`,
+          // );
 
           if (
             activeRequestRef.current?.jobId &&
@@ -427,7 +439,20 @@ export function useChat({
     (text: string) => {
       if (status !== "idle" && status !== "error") return;
 
-      // Optimistically append the user's message so it renders instantly
+      // Extract file mentions as an array of paths
+      const mentions: string[] = [];
+      const mentionRegex = /(?:^|\s)@(?:(?:"([^"]+)")|([a-zA-Z0-9.\-_/]+))/g;
+      const matches = Array.from(text.matchAll(mentionRegex));
+
+      if (matches.length > 0) {
+        for (const match of matches) {
+          if (match[1])
+            mentions.push(match[1]); // Quoted mention
+          else if (match[2]) mentions.push(match[2]); // Unquoted mention
+        }
+      }
+
+      // Optimistically append the user's un-augmented message so it renders cleanly in UI
       const optimisticMsg: Message = {
         id: `temp-${Date.now()}`,
         sessionId,
@@ -452,6 +477,7 @@ export function useChat({
       logDebug(`[sendMessage] Starting new job: ${newJobId}`);
       const newReq = {
         message: text,
+        mentions,
         activeCwd: process.cwd(),
         isAutoResume: false,
         timestamp: Date.now(),
@@ -464,6 +490,7 @@ export function useChat({
         jobId: newJobId,
         sessionId,
         message: text,
+        mentions,
         activeCwd: process.cwd(),
         isAutoResume: false,
         toolsHash,
@@ -475,7 +502,8 @@ export function useChat({
     [sessionId, status, currentModel, currentMode, toolsHash],
   );
 
-  const executeCommand = useCallback(async (cmd: string) => {
+  const executeCommand = useCallback(
+    async (cmd: string) => {
       // Optimistically add command to UI
       const cmdId = `temp-cmd-${Date.now()}`;
       setHistory((prev) => [
@@ -495,11 +523,15 @@ export function useChat({
           toolCalls: null,
           toolCallId: null,
           createdAt: new Date().toISOString() as any,
-        }
+        },
       ]);
 
       try {
-        const output = await executeClientTool("run_command", { command: cmd }, process.cwd());
+        const output = await executeClientTool(
+          "run_command",
+          { command: cmd },
+          process.cwd(),
+        );
         setHistory((prev) => [
           ...prev,
           {
@@ -517,7 +549,7 @@ export function useChat({
             toolCalls: null,
             toolCallId: null,
             createdAt: new Date().toISOString() as any,
-          }
+          },
         ]);
       } catch (err: any) {
         setHistory((prev) => [
@@ -537,14 +569,16 @@ export function useChat({
             toolCalls: null,
             toolCallId: null,
             createdAt: new Date().toISOString() as any,
-          }
+          },
         ]);
       }
-    }, [sessionId, currentModel, currentMode]);
+    },
+    [sessionId, currentModel, currentMode],
+  );
 
   const submitInterrupt = useCallback(
     (answerMap: Record<string, any> | any) => {
-      console.log(`[use-chat] submitInterrupt called with status=${status}`);
+      // console.log(`[use-chat] submitInterrupt called with status=${status}`);
       if (status !== "interrupted") return;
 
       // Ensure answer is formatted as a Record mapping interrupt ID to answer.
@@ -606,6 +640,27 @@ export function useChat({
 
       setInterruptPayload(null);
       setStatus("streaming");
+      
+      let lastUserContent = "";
+      for (let i = history.length - 1; i >= 0; i--) {
+        const msg = history[i];
+        if (msg && msg.role === "USER") {
+          lastUserContent = msg.content;
+          break;
+        }
+      }
+      const mentions: string[] = [];
+      if (lastUserContent) {
+        const mentionRegex = /(?:^|\s)@(?:(?:"([^"]+)")|([a-zA-Z0-9.\-_/]+))/g;
+        const matches = Array.from(lastUserContent.matchAll(mentionRegex));
+        if (matches.length > 0) {
+          for (const match of matches) {
+            if (match[1]) mentions.push(match[1]);
+            else if (match[2]) mentions.push(match[2]);
+          }
+        }
+      }
+      
       const newJobId = globalThis.crypto.randomUUID();
       logDebug(`[submitInterrupt] Starting new job: ${newJobId}`);
       const newReq = {
@@ -620,6 +675,7 @@ export function useChat({
         jobId: newJobId,
         sessionId,
         resume: resumePayload,
+        mentions,
         toolsHash,
         model: currentModel,
         mode: currentMode,
@@ -631,7 +687,10 @@ export function useChat({
 
   const stop = useCallback(() => {
     // 1. Explicitly notify the backend to abort the LangGraph run
-    cancelChatMutation.mutate({ sessionId, jobId: activeRequestRef.current?.jobId || "" });
+    cancelChatMutation.mutate({
+      sessionId,
+      jobId: activeRequestRef.current?.jobId || "",
+    });
 
     // 2. Setting activeRequest to null immediately unsubscribes tRPC
     setActiveRequest(null);

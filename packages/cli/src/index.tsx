@@ -88,4 +88,8 @@ const renderer = await createCliRenderer({
 
 installCapture(renderer, { keybinding: "ctrl+x" });
 
+import { workspaceScanner } from "./lib/scanner";
+
+await workspaceScanner.init();
+
 createRoot(renderer).render(<App />);
