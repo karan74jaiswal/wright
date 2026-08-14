@@ -29,17 +29,20 @@ const SessionShell = ({
   const { currentMode, setMode } = usePromptConfig();
 
   useKeyboard(
-    useCallback((key: any) => {
-      if (!isTopLayer("base")) return;
-      
-      if (key.name == "escape" && loading && onCancel) {
-        onCancel();
-      }
-      
-      if (key.name == "tab" && !loading && !inputDisabled) {
-        setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
-      }
-    }, [isTopLayer, loading, onCancel, inputDisabled, setMode, currentMode])
+    useCallback(
+      (key: any) => {
+        if (!isTopLayer("base")) return;
+
+        if (key.name == "escape" && loading && onCancel) {
+          onCancel();
+        }
+
+        if (key.name == "tab" && !loading && !inputDisabled) {
+          setMode(currentMode === "BUILD" ? "PLAN" : "BUILD");
+        }
+      },
+      [isTopLayer, loading, onCancel, inputDisabled, setMode, currentMode],
+    ),
   );
 
   return (

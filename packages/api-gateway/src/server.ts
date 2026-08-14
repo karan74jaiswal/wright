@@ -4,6 +4,7 @@ import cors from "cors";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import dotenv from "dotenv";
 import path from "node:path";
+import { verifyToken } from "@clerk/backend";
 
 dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
@@ -20,6 +21,10 @@ const SESSION_SERVICE_URL =
 const CHAT_SERVICE_URL =
   process.env.CHAT_SERVICE_URL || "http://localhost:3002";
 
+import { requireAuth } from "./middleware/auth";
+
+app.use("/api", requireAuth);
+
 // Proxy /api/session.* to session-service
 app.use(
   createProxyMiddleware({
@@ -27,6 +32,12 @@ app.use(
     changeOrigin: true,
     pathFilter: (pathname) => /^\/api\/session(?:[./]|$)/.test(pathname),
     on: {
+      proxyReq: (proxyReq) => {
+        proxyReq.setHeader(
+          "x-internal-secret",
+          process.env.JWT_SECRET || "jwt-secret",
+        );
+      },
       error: (err, _req, res) => {
         console.error("Proxy error (session-service):", err.message);
         if (res && "writeHead" in res) {
@@ -54,6 +65,12 @@ app.use(
     changeOrigin: true,
     pathFilter: (pathname) => /^\/api\/chat(?:[./]|$)/.test(pathname),
     on: {
+      proxyReq: (proxyReq) => {
+        proxyReq.setHeader(
+          "x-internal-secret",
+          process.env.JWT_SECRET || "jwt-secret",
+        );
+      },
       error: (err, _req, res) => {
         console.error("Proxy error (chat-service):", err.message);
         if (res && "writeHead" in res) {

@@ -32,7 +32,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 const CONFIG_DIR = join(homedir(), ".wright");
 const PREFERENCES_PATH = join(CONFIG_DIR, "prefs.json");
 
-function getInitialTheme(): Theme {
+export function getInitialTheme(): Theme {
   try {
     const preferences = JSON.parse(
       readFileSync(PREFERENCES_PATH, {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure, middleware } from "@wright/shared";
+import { router, publicProcedure, protectedProcedure, middleware } from "@wright/shared";
 import { prisma as db } from "@wright/database/client";
 import { Mode, Role, MessageStatus } from "@wright/database/enums";
 import { findChatSupportedModel } from "@wright/shared";
@@ -45,8 +45,9 @@ const createSessionSchema = z.object({
 });
 
 export const sessionRouter = router({
-  listSessions: publicProcedure.query(async () => {
+  listSessions: protectedProcedure.query(async ({ ctx }) => {
     const sessions = await db.session.findMany({
+      where: { userId: ctx.userId },
       orderBy: { createdAt: "desc" },
       select: { id: true, title: true, createdAt: true },
     });
@@ -54,12 +55,12 @@ export const sessionRouter = router({
     return sessions;
   }),
 
-  getSession: publicProcedure
+  getSession: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const { id } = input;
       const session = await db.session.findUnique({
-        where: { id },
+        where: { id, userId: ctx.userId },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
         },
@@ -68,7 +69,7 @@ export const sessionRouter = router({
       if (!session) {
         Sentry.captureMessage("Session not found", {
           level: "warning",
-          extra: { sessionId: id, userId: "mock-user" },
+          extra: { sessionId: id, userId: ctx.userId },
         });
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -94,17 +95,17 @@ export const sessionRouter = router({
       };
     }),
 
-  createSession: publicProcedure
+  createSession: protectedProcedure
     .use(createSessionValidatorMiddleware)
     .input(createSessionSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { initialMessage, ...data } = input;
 
       try {
         const session = await db.session.create({
           data: {
             ...data,
-            userId: "mock-user",
+            userId: ctx.userId,
             ...(initialMessage && {
               messages: {
                 create: {
@@ -135,7 +136,7 @@ export const sessionRouter = router({
       }
     }),
 
-  syncSessionConfig: publicProcedure
+  syncSessionConfig: protectedProcedure
     .input(
       z.object({
         sessionId: z.string(),
@@ -143,7 +144,7 @@ export const sessionRouter = router({
         enabledMcps: z.record(z.string(), z.any()),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { sessionId, enabledSkills, enabledMcps } = input;
       // console.log(enabledMcps);
       const sortedSkills = Object.fromEntries(
@@ -167,7 +168,7 @@ export const sessionRouter = router({
         await redis.set(redisKey, payloadString, "EX", 604800);
 
         await db.session.update({
-          where: { id: sessionId },
+          where: { id: sessionId, userId: ctx.userId },
           data: {
             toolsHash: hash,
           },

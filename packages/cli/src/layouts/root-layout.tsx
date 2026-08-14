@@ -5,18 +5,51 @@ import KeyBoardProvider from "../providers/keyboard";
 import DialogProvider from "../providers/dialog";
 import ToastProvider from "../providers/toast";
 import ThemedRoot from "./themed-root";
-import ThemeProvider from "../providers/theme";
-import PromptConfigProvider, { usePromptConfig } from "../providers/prompt-config";
+import PromptConfigProvider, {
+  usePromptConfig,
+} from "../providers/prompt-config";
 import TrustWorkspaceScreen from "../screens/trust-workspace";
 import McpProvider from "../providers/mcp";
 import SkillsProvider from "../providers/skills";
+import { AuthProvider, useAuth } from "../providers/auth-provider";
+import { useDialog } from "../providers/dialog";
+import { useToast } from "../providers/toast";
+import { ToastVariant } from "../providers/toast/types";
+import { LogoutDialog } from "../dialogs/logout-dialog";
+
+function AuthEffects() {
+  const { remoteLogout, authError, clearAuthError } = useAuth();
+  const dialog = useDialog();
+  const { show } = useToast();
+
+  useEffect(() => {
+    if (remoteLogout) {
+      dialog.open({
+        title: "Session Expired",
+        children: <LogoutDialog />,
+      });
+    }
+  }, [remoteLogout, dialog]);
+
+  useEffect(() => {
+    if (authError) {
+      show({ variant: ToastVariant.ERROR, message: authError });
+      clearAuthError();
+    }
+  }, [authError, show, clearAuthError]);
+
+  return null;
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  ErrorBoundaryState
+> {
   constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -56,7 +89,7 @@ function InnerLayout() {
     // By setting it inside a React effect, we ensure it overrides the shell
     // AFTER OpenTUI has fully initialized the alternate screen buffer.
     process.stdout.write("\x1b]0;wright\x07");
-    
+
     // A secondary timeout just in case the terminal emulator is slow to switch buffers
     const timer = setTimeout(() => {
       process.stdout.write("\x1b]0;wright\x07");
@@ -76,7 +109,10 @@ function InnerLayout() {
             <ThemedRoot>
               <SkillsProvider>
                 <McpProvider>
-                  <Outlet />
+                  <AuthProvider>
+                    <AuthEffects />
+                    <Outlet />
+                  </AuthProvider>
                 </McpProvider>
               </SkillsProvider>
             </ThemedRoot>
@@ -88,11 +124,5 @@ function InnerLayout() {
 }
 
 export default function RootLayout() {
-  return (
-    <ThemeProvider>
-      <PromptConfigProvider>
-        <InnerLayout />
-      </PromptConfigProvider>
-    </ThemeProvider>
-  );
+  return <InnerLayout />;
 }

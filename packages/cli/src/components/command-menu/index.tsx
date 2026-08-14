@@ -6,6 +6,7 @@ import { getFilteredCommands } from "./filter-command";
 import { COMMANDS } from "./commands";
 import type { JSX } from "@opentui/react/jsx-runtime";
 import { useTheme } from "../../providers/theme";
+import { useAuth } from "../../providers/auth-provider";
 
 const MAX_VISIBLE_COMMANDS = 8;
 const COMMAND_COLUMN_WIDTH =
@@ -27,7 +28,8 @@ export default function CommandMenu({
   onExecute,
 }: CommandMenuProps): JSX.Element {
   const { colors } = useTheme();
-  const filteredCommands = getFilteredCommands(query);
+  const auth = useAuth();
+  const filteredCommands = getFilteredCommands(query, auth.isAuthenticated);
 
   const commandMenuVisibleHeight = Math.min(
     filteredCommands.length,

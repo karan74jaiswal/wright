@@ -15,9 +15,11 @@ import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
 import { usePromptConfig } from "../providers/prompt-config";
 import { useNavigate } from "react-router";
+import { useAuth } from "../providers/auth-provider";
 
 import FileMenu from "./file-menu";
 import { useFileMenu } from "./file-menu/use-file-menu";
+import { ToastVariant } from "../providers/toast/types";
 
 interface InputBarProps {
   onSubmit: (text: string) => void;
@@ -51,6 +53,7 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
   const toast = useToast();
   const dialog = useDialog();
   const navigate = useNavigate();
+  const auth = useAuth();
   const { isTopLayer, setResponder, push } = useKeyboardLayer();
   const { colors } = useTheme();
   const { currentMode } = usePromptConfig();
@@ -95,9 +98,17 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
     const userInput = textAreaRef.current?.plainText.trim();
     if (!userInput.length) return;
 
+    if (!auth.isAuthenticated) {
+      toast.show({
+        message: "Authentication required. Please run /login to continue.",
+        variant: ToastVariant.INFO,
+      });
+      return;
+    }
+
     onSubmit(userInput);
     textAreaRef.current.setText("");
-  }, [disabled, onSubmit]);
+  }, [disabled, onSubmit, auth.isAuthenticated, toast]);
 
   const handleCommand = useCallback(
     (cmd: Command | undefined) => {
@@ -110,12 +121,13 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
           toast,
           dialog,
           navigate,
+          auth,
         });
       else {
         textAreaRef.current.insertText(`${cmd.value} `);
       }
     },
-    [renderer, toast, dialog, navigate],
+    [renderer, toast, dialog, navigate, auth],
   );
 
   const handleCommandExecute = useCallback(
@@ -144,7 +156,11 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
 
         // Wrap in quotes if there are spaces. If it's a directory, leave quote open for continuation.
         const hasSpaces = file.includes(" ");
-        const formattedFile = hasSpaces ? (isDir ? `"${file}` : `"${file}"`) : file;
+        const formattedFile = hasSpaces
+          ? isDir
+            ? `"${file}`
+            : `"${file}"`
+          : file;
 
         // Preserve the leading space if the match had one
         const prefix = match[0].match(/^\s/) ? match[0].charAt(0) : "";

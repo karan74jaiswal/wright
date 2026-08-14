@@ -28,11 +28,23 @@ app.use((req, res, next) => {
   return standardPayloadParser(req, res, next);
 });
 
+// Internal security middleware: prevent direct access bypassing the gateway
+app.use("/api", (req, res, next) => {
+  const internalSecret = req.headers["x-internal-secret"];
+  const expectedSecret = process.env.JWT_SECRET || "jwt-secret";
+  if (internalSecret !== expectedSecret) {
+    res.status(403).json({ error: "Direct access to microservice forbidden. Please route through API Gateway." });
+    return;
+  }
+  next();
+});
+
 const createContext = ({
   req,
   res,
 }: trpcExpress.CreateExpressContextOptions) => {
-  return { req, res };
+  const userId = req.headers["x-user-id"] as string | undefined;
+  return { req, res, userId };
 };
 
 app.use(
