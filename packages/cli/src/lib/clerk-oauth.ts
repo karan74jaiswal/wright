@@ -169,19 +169,23 @@ export async function refreshJWT(refreshToken: string): Promise<{ jwt: string, r
 
 let activeRefreshPromise: Promise<{ jwt: string, refreshToken: string }> | null = null;
 
-export async function forceRefresh(): Promise<{ jwt: string, refreshToken: string }> {
+export function forceRefresh(): Promise<{ jwt: string, refreshToken: string }> {
   if (activeRefreshPromise) {
     return activeRefreshPromise;
   }
   
-  const state = await AuthManager.getState();
-  if (!state.sessionId) {
-    throw new Error("UNAUTHORIZED"); // No session to refresh
-  }
-
-  activeRefreshPromise = refreshJWT(state.sessionId).finally(() => {
-    activeRefreshPromise = null;
-  });
+  // Assign synchronously before any await to prevent race conditions
+  activeRefreshPromise = (async () => {
+    try {
+      const state = await AuthManager.getState();
+      if (!state.sessionId) {
+        throw new Error("UNAUTHORIZED"); // No session to refresh
+      }
+      return await refreshJWT(state.sessionId);
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
 
   return activeRefreshPromise;
 }

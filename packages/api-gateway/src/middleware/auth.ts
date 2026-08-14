@@ -1,33 +1,28 @@
 import express from "express";
-import { verifyToken } from "@clerk/backend";
-import { z } from "zod";
+import { createClerkClient } from "@clerk/backend";
 
-const userInfoSchema = z.object({
-  user_id: z.string().optional(),
-  sub: z.string().optional(),
-}).transform((data) => {
-  const id = data.user_id || data.sub;
-  if (!id) {
-    throw new Error("No user ID found in userinfo response");
-  }
-  return id;
-});
-
-function decodeJwtExp(token: string): number | null {
+function decodeJwt(token: string): any {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf-8"));
-    if (payload && typeof payload.exp === "number") {
-      return payload.exp * 1000;
-    }
+    return JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf-8"));
   } catch {
     return null;
+  }
+}
+
+function decodeJwtExp(token: string): number | null {
+  const payload = decodeJwt(token);
+  if (payload && typeof payload.exp === "number") {
+    return payload.exp * 1000;
   }
   return null;
 }
 
-export const tokenCache = new Map<string, { userId: string; expiresAt: number }>();
+export const tokenCache = new Map<
+  string,
+  { userId: string; expiresAt: number }
+>();
 
 // Run background garbage collection to prevent memory leaks from expired tokens
 setInterval(() => {
@@ -61,52 +56,40 @@ export const requireAuth: express.RequestHandler = async (req, res, next) => {
 
   try {
     let userId: string;
-    try {
-      // 2. Try standard Session JWT verification first
-      const verified = await verifyToken(token, {
-        secretKey: process.env.CLERK_SECRET_KEY,
-      });
-      userId = verified.sub;
-    } catch (err: any) {
-      // 3. Fallback: If it's an OAuth token (at+jwt), verify via the userinfo endpoint
-      if (err.message && err.message.includes("at+jwt")) {
-        const frontendApi =
-          process.env.CLERK_FRONTEND_API ||
-          "https://magical-burro-2.clerk.accounts.dev";
-        const userInfoRes = await fetch(`${frontendApi}/oauth/userinfo`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    const clerkClient = createClerkClient({
+      secretKey: process.env.CLERK_SECRET_KEY,
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    });
 
-        if (!userInfoRes.ok) {
-          const text = await userInfoRes.text().catch(() => "");
-          console.error(
-            `OAuth userinfo failed: ${userInfoRes.status} ${userInfoRes.statusText}`,
-            text,
-          );
-          throw new Error(`OAuth userinfo failed: ${userInfoRes.statusText}`, {
-            cause: err,
-          });
-        }
+    const authRequest = new Request("http://localhost", {
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
 
-        let userInfoJson: unknown;
-        try {
-          userInfoJson = await userInfoRes.json();
-        } catch (parseErr) {
-          throw new Error("Invalid JSON from userinfo response", {
-            cause: parseErr,
-          });
-        }
+    const expectedAudience = process.env.CLERK_OAUTH_AUDIENCE;
 
-        try {
-          userId = userInfoSchema.parse(userInfoJson);
-        } catch (zodErr) {
-          console.error("Zod validation failed on userinfo response:", userInfoJson);
-          throw new Error("No user ID found in userinfo response", {
-            cause: zodErr,
-          });
+    const authState = await clerkClient.authenticateRequest(authRequest, {
+      audience: expectedAudience,
+      // Accept both standard session JWTs and OAuth access tokens
+      acceptsToken: ["session", "oauth_token"] as any,
+    });
+
+    if (!authState.isAuthenticated) {
+      throw new Error(`Token verification failed: ${authState.status}`);
+    }
+
+    userId = authState.toAuth().userId;
+
+    // Validate required scopes if configured
+    const requiredScopes = process.env.CLERK_OAUTH_SCOPES?.split(" ") || [];
+    if (requiredScopes.length > 0) {
+      const payload = decodeJwt(token);
+      const tokenScopes = (payload?.scope || "").split(" ");
+      for (const scope of requiredScopes) {
+        if (!tokenScopes.includes(scope)) {
+          throw new Error(`Missing required scope: ${scope}`);
         }
-      } else {
-        throw err; // Not an at+jwt error, rethrow
       }
     }
 
