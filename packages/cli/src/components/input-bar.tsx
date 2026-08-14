@@ -115,15 +115,22 @@ export function InputBar({ onSubmit, disabled = false }: InputBarProps) {
       if (!textAreaRef.current || !cmd) return;
       textAreaRef.current.setText("");
 
-      if (cmd.action)
-        cmd.action({
-          exit: () => renderer.destroy(),
-          toast,
-          dialog,
-          navigate,
-          auth,
+      if (cmd.action) {
+        Promise.resolve(
+          cmd.action({
+            exit: () => renderer.destroy(),
+            toast,
+            dialog,
+            navigate,
+            auth,
+          })
+        ).catch((err) => {
+          toast.show({
+            message: `Command failed: ${err?.message || "Unknown error"}`,
+            variant: ToastVariant.ERROR,
+          });
         });
-      else {
+      } else {
         textAreaRef.current.insertText(`${cmd.value} `);
       }
     },

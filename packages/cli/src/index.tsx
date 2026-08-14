@@ -106,13 +106,21 @@ class AuthenticatedEventSource extends EventSource {
     } catch (e) {
       // Ignore
     }
-    let newUrl = url;
-    if (jwt) {
-      const char = newUrl.includes("?") ? "&" : "?";
-      newUrl = `${newUrl}${char}token=${encodeURIComponent(jwt)}`;
-    }
+
+    const modifiedInit = {
+      ...init,
+      fetch: (fetchUrl: string, fetchInit: any) => {
+        return fetch(fetchUrl, {
+          ...fetchInit,
+          headers: {
+            ...fetchInit?.headers,
+            ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+          },
+        });
+      },
+    };
     
-    super(newUrl, init);
+    super(url, modifiedInit);
   }
 }
 

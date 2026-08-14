@@ -1,5 +1,19 @@
 import type { ThemeColors } from "../theme";
 
+const escapeHtml = (value?: string) =>
+  (value ?? "").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character as keyof typeof escapeHtml.map]!,
+  );
+escapeHtml.map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
 export const getAuthHtml = (success: boolean, errorMsg?: string, theme?: ThemeColors) => `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,7 +105,7 @@ export const getAuthHtml = (success: boolean, errorMsg?: string, theme?: ThemeCo
       }
     </div>
     <h1>${success ? 'Authentication Successful' : 'Authentication Failed'}</h1>
-    <p>${success ? 'You have successfully authenticated with Wright CLI.<br/>You can safely close this tab and return to your terminal.' : errorMsg}</p>
+    <p>${success ? 'You have successfully authenticated with Wright CLI.<br/>You can safely close this tab and return to your terminal.' : escapeHtml(errorMsg)}</p>
   </div>
 </body>
 </html>`;

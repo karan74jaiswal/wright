@@ -4,8 +4,12 @@ import cors from "cors";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
 import { prisma as db } from "@wright/database/client";
-
 import { appRouter } from "./index";
+
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is missing. It is required to secure internal microservice traffic.");
+  process.exit(1);
+}
 
 const app = express();
 const port = Number(process.env.SESSION_SERVICE_PORT) || 3001;
@@ -19,7 +23,7 @@ app.use(express.json({ limit: "1mb" }));
 // Internal security middleware: prevent direct access bypassing the gateway
 app.use("/api", (req, res, next) => {
   const internalSecret = req.headers["x-internal-secret"];
-  const expectedSecret = process.env.JWT_SECRET || "jwt-secret";
+  const expectedSecret = process.env.JWT_SECRET;
   if (internalSecret !== expectedSecret) {
     res.status(403).json({ error: "Direct access to microservice forbidden. Please route through API Gateway." });
     return;

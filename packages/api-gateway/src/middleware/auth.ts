@@ -13,15 +13,37 @@ const userInfoSchema = z.object({
   return id;
 });
 
+function decodeJwtExp(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf-8"));
+    if (payload && typeof payload.exp === "number") {
+      return payload.exp * 1000;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export const tokenCache = new Map<string, { userId: string; expiresAt: number }>();
+
+// Run background garbage collection to prevent memory leaks from expired tokens
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, cached] of tokenCache.entries()) {
+    if (now >= cached.expiresAt) {
+      tokenCache.delete(token);
+    }
+  }
+}, 60 * 1000).unref();
 
 export const requireAuth: express.RequestHandler = async (req, res, next) => {
   let token = "";
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     token = authHeader.split(" ")[1] || "";
-  } else if (typeof req.query.token === "string") {
-    token = req.query.token;
   }
 
   if (!token) {
@@ -88,8 +110,11 @@ export const requireAuth: express.RequestHandler = async (req, res, next) => {
       }
     }
 
-    // 4. Cache the successful resolution for 5 minutes
-    tokenCache.set(token, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
+    // 4. Cache the successful resolution only if we have a known expiration
+    const expiresAt = decodeJwtExp(token);
+    if (expiresAt) {
+      tokenCache.set(token, { userId, expiresAt });
+    }
 
     // Inject trusted user ID for downstream microservices
     req.headers["x-user-id"] = userId;

@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import type { AuthState } from "../lib/auth";
 import { AuthManager } from "../lib/auth";
-import { loginWithPKCE, refreshJWT } from "../lib/clerk-oauth";
+import { loginWithPKCE, forceRefresh } from "../lib/clerk-oauth";
 import Spinner from "../components/spinner";
 import Header from "../components/header";
 import { useTheme } from "./theme";
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshIntervalRef.current = setInterval(async () => {
       try {
         const { jwt: newJwt, refreshToken: newRefresh } =
-          await refreshJWT(refreshToken);
+          await forceRefresh();
         setJwt(newJwt);
         // If it rotated, we need to update the interval closure, but since we rely on the DB/AuthManager it's fine.
         // Actually it's better to recursively call startPolling if it rotates, but let's just clear and restart if needed.
@@ -125,9 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const state = await AuthManager.getState();
         if (state.sessionId) {
           try {
-            const { jwt: newJwt, refreshToken } = await refreshJWT(
-              state.sessionId,
-            );
+            const { jwt: newJwt, refreshToken } = await forceRefresh();
             setJwt(newJwt);
             startPolling(refreshToken);
           } catch (err: any) {

@@ -212,6 +212,7 @@ export const chatRouter = router({
     }),
 
     cancelChat: protectedProcedure
+    .use(sessionValidatorMiddleware)
     .input(z.object({ sessionId: z.string(), jobId: z.string() }))
     .mutation(async ({ input }) => {
       // Persist cancellation so worker doesn't start if it was queued
