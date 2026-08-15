@@ -6,8 +6,15 @@ import * as trpcExpress from "@trpc/server/adapters/express";
 import * as Sentry from "@sentry/bun";
 import { appRouter } from "./index";
 import { prisma as db } from "@wright/database/client";
+import { redis, createRedisClient } from "@wright/redis";
+import { chatQueue } from "./queue";
 import { setupCheckpointer, shutdownCheckpointer } from "@wright/agent";
 import { setupBullBoard } from "./dashboard";
+
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is missing. It is required to secure internal microservice traffic.");
+  process.exit(1);
+}
 
 const app = express();
 const port = Number(process.env.CHAT_SERVICE_PORT) || 3002;
@@ -28,11 +35,23 @@ app.use((req, res, next) => {
   return standardPayloadParser(req, res, next);
 });
 
+// Internal security middleware: prevent direct access bypassing the gateway
+app.use("/api", (req, res, next) => {
+  const internalSecret = req.headers["x-internal-secret"];
+  const expectedSecret = process.env.JWT_SECRET;
+  if (internalSecret !== expectedSecret) {
+    res.status(403).json({ error: "Direct access to microservice forbidden. Please route through API Gateway." });
+    return;
+  }
+  next();
+});
+
 const createContext = ({
   req,
   res,
 }: trpcExpress.CreateExpressContextOptions) => {
-  return { req, res };
+  const userId = req.headers["x-user-id"] as string | undefined;
+  return { req, res, userId };
 };
 
 app.use(

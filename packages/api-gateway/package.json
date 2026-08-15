@@ -8,11 +8,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.16.5",
+    "@wright/shared": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "http-proxy-middleware": "^4.2.0",
-    "@wright/shared": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

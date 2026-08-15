@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import {
   router,
   publicProcedure,
+  protectedProcedure,
   middleware,
   chatRequestSchema,
 } from "@wright/shared";
@@ -47,8 +48,12 @@ const chatValidatorMiddleware = middleware(async ({ next, path }) => {
   return result;
 });
 
-// Middleware to ensure the provided session ID actually exists
-const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
+// Middleware to ensure the provided session ID actually exists and belongs to the user
+const sessionValidatorMiddleware = middleware(async ({ ctx, next, getRawInput }) => {
+  if (!ctx.userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
   const rawInput = await getRawInput();
   const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(rawInput);
 
@@ -60,7 +65,7 @@ const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
   }
 
   const session = await db.session.findUnique({
-    where: { id: parsed.data.sessionId },
+    where: { id: parsed.data.sessionId, userId: ctx.userId },
   });
   if (!session) {
     throw new TRPCError({
@@ -76,7 +81,7 @@ const sessionValidatorMiddleware = middleware(async ({ next, getRawInput }) => {
 // Aborts are handled by publishing a cancel event to Redis Pub/Sub.
 
 export const chatRouter = router({
-  streamChat: publicProcedure
+  streamChat: protectedProcedure
     .use(chatValidatorMiddleware)
     .use(sessionValidatorMiddleware)
     .input(z.object({ sessionId: z.string(), jobId: z.string() }))
@@ -139,7 +144,7 @@ export const chatRouter = router({
       }
     }),
 
-  submitChatJob: publicProcedure
+  submitChatJob: protectedProcedure
     .use(chatValidatorMiddleware)
     .use(sessionValidatorMiddleware)
     .input(chatRequestSchema)
@@ -206,7 +211,8 @@ export const chatRouter = router({
       return { jobId: job.id };
     }),
 
-    cancelChat: publicProcedure
+    cancelChat: protectedProcedure
+    .use(sessionValidatorMiddleware)
     .input(z.object({ sessionId: z.string(), jobId: z.string() }))
     .mutation(async ({ input }) => {
       // Persist cancellation so worker doesn't start if it was queued

@@ -43,6 +43,7 @@ export const COMMANDS: Command[] = [
     name: "sessions",
     description: "Browse past sessions",
     value: "/sessions",
+    authRequired: true,
     action: (ctx) => {
       ctx.dialog.open({
         title: "Select Session",
@@ -66,17 +67,18 @@ export const COMMANDS: Command[] = [
     name: "login",
     description: "Sign in with your browser",
     value: "/login",
-    action: (ctx) =>
-      ctx.toast.show({
-        message: "Opening Browser to sign in...",
-      }),
+    authRequired: "unauthenticatedOnly",
+    action: (ctx) => ctx.auth.login(),
   },
   {
     name: "logout",
     description: "Sign out of your account",
     value: "/logout",
-    action: (ctx) =>
-      ctx.toast.show({ message: "Signed Out", variant: ToastVariant.SUCCESS }),
+    authRequired: true,
+    action: async (ctx) => {
+      await ctx.auth.logout();
+      ctx.toast.show({ message: "Signed Out", variant: ToastVariant.SUCCESS });
+    },
   },
   {
     name: "upgrade",

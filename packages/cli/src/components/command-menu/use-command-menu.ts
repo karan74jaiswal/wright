@@ -4,6 +4,7 @@ import { getFilteredCommands } from "./filter-command";
 import type { Command } from "./types";
 import { useKeyboard } from "@opentui/react";
 import { useKeyboardLayer } from "../../providers/keyboard";
+import { useAuth } from "../../providers/auth-provider";
 
 export interface UseCommandMenuReturn {
   showCommandMenu: boolean;
@@ -31,9 +32,11 @@ export function useCommandMenu(): UseCommandMenuReturn {
     pop("command");
   }, [pop]);
 
+  const auth = useAuth();
+
   const filteredCommands = useMemo(
-    () => getFilteredCommands(commandQuery),
-    [commandQuery],
+    () => getFilteredCommands(commandQuery, auth.isAuthenticated),
+    [commandQuery, auth.isAuthenticated],
   );
 
   const handleContentChange = (text: string) => {

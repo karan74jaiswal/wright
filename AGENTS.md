@@ -34,7 +34,9 @@ Always ensure you understand the flow of events across these 5 packages before m
 
 - **CRITICAL**: If the user explicitly asks for a plan first before execution, you MUST ONLY perform read operations (explore codebase, read files) to formulate a detailed step-by-step plan. DO NOT execute any state-mutating tasks (create, edit, delete files or run destructive commands) until the user explicitly approves the plan in a subsequent prompt.
 
-## Verifying LangGraph Behavior
-
 When writing code that uses LangGraph (e.g., interrupts, fault tolerance), ALWAYS verify your understanding by querying the LangChain documentation using the `docs-langchain` MCP server.
 
+## Strict Skill Usage Rules (OpenTUI & Clerk)
+
+- **CRITICAL**: For ANY changes, implementations, or issues related to **OpenTUI** (including `TestRenderer`), you MUST read and follow the `opentui` skill instructions (`view_file` on `SKILL.md`). Do NOT make assumptions about OpenTUI behavior, props, or API.
+- **CRITICAL**: For ANY changes, implementations, or issues related to **Clerk** (including FAPI, tokens, PKCE, login flows), you MUST consult the relevant `clerk-*` skills (e.g., `clerk`, `clerk-cli`, etc.). Do NOT make assumptions about Clerk's OAuth flows or API endpoints without verifying them against the skills.

@@ -40,6 +40,7 @@
     "date-fns": "^4.4.0",
     "eventsource": "^4.1.0",
     "minimatch": "^10.2.6",
+    "open": "^11.0.1",
     "opentui-spinner": "^0.0.7",
     "pretty-ms": "^9.3.0",
     "react": "^19.2.7",

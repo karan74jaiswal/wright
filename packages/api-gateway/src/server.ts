@@ -17,8 +17,16 @@ app.use(cors({ origin: ALLOWED_ORIGINS }));
 
 const SESSION_SERVICE_URL =
   process.env.SESSION_SERVICE_URL || "http://localhost:3001";
-const CHAT_SERVICE_URL =
-  process.env.CHAT_SERVICE_URL || "http://localhost:3002";
+const CHAT_SERVICE_URL = process.env.CHAT_SERVICE_URL || "http://localhost:3002";
+
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is missing. It is required to secure internal microservice traffic.");
+  process.exit(1);
+}
+
+import { requireAuth } from "./middleware/auth";
+
+app.use("/api", requireAuth);
 
 // Proxy /api/session.* to session-service
 app.use(
@@ -27,8 +35,18 @@ app.use(
     changeOrigin: true,
     pathFilter: (pathname) => /^\/api\/session(?:[./]|$)/.test(pathname),
     on: {
+      proxyReq: (proxyReq) => {
+        proxyReq.setHeader(
+          "x-internal-secret",
+          process.env.JWT_SECRET as string,
+        );
+      },
       error: (err, _req, res) => {
-        console.error("Proxy error (session-service):", err.message);
+        if (err.message.includes("The socket connection was closed unexpectedly")) {
+          // Ignore harmless client disconnects on SSE streams
+        } else {
+          console.error("Proxy error (session-service):", err.message);
+        }
         if (res && "writeHead" in res) {
           const serverRes = res as http.ServerResponse;
           if (!serverRes.headersSent) {
@@ -54,8 +72,18 @@ app.use(
     changeOrigin: true,
     pathFilter: (pathname) => /^\/api\/chat(?:[./]|$)/.test(pathname),
     on: {
+      proxyReq: (proxyReq) => {
+        proxyReq.setHeader(
+          "x-internal-secret",
+          process.env.JWT_SECRET as string,
+        );
+      },
       error: (err, _req, res) => {
-        console.error("Proxy error (chat-service):", err.message);
+        if (err.message.includes("The socket connection was closed unexpectedly")) {
+          // Ignore harmless client disconnects on SSE streams
+        } else {
+          console.error("Proxy error (chat-service):", err.message);
+        }
         if (res && "writeHead" in res) {
           const serverRes = res as http.ServerResponse;
           if (!serverRes.headersSent) {
