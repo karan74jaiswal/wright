@@ -71,8 +71,7 @@ export const requireAuth: express.RequestHandler = async (req, res, next) => {
 
     const authState = await clerkClient.authenticateRequest(authRequest, {
       audience: expectedAudience,
-      // Accept both standard session JWTs and OAuth access tokens
-      acceptsToken: ["session", "oauth_token"] as any,
+      acceptsToken: ["session_token", "oauth_token"],
     });
 
     if (!authState.isAuthenticated) {
@@ -84,8 +83,8 @@ export const requireAuth: express.RequestHandler = async (req, res, next) => {
     // Validate required scopes if configured
     const requiredScopes = process.env.CLERK_OAUTH_SCOPES?.split(" ") || [];
     if (requiredScopes.length > 0) {
-      const payload = decodeJwt(token);
-      const tokenScopes = (payload?.scope || "").split(" ");
+      const auth = authState.toAuth();
+      const tokenScopes = (auth as any).scopes || [];
       for (const scope of requiredScopes) {
         if (!tokenScopes.includes(scope)) {
           throw new Error(`Missing required scope: ${scope}`);
